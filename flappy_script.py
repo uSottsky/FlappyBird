@@ -10,58 +10,48 @@ pygame.init()
 # Initialize pygame mixer for sounds
 pygame.mixer.init()
 
-# Define folder paths
-SPRITE_FOLDER = "sprites"
-SOUND_FOLDER = "sounds"
-
-# Helper function to load assets from the correct folders
-def get_asset_path(filename, folder):
-    """Return the correct path for an asset file, checking multiple possible locations."""
-    # Try direct path in the specified folder
-    direct_path = os.path.join(folder, filename)
-    if os.path.exists(direct_path):
-        return direct_path
+# Define a simpler asset loading function
+def get_asset_path(filename):
+    """Return the correct path for an asset file in the root directory."""
+    # Try direct path in the root folder
+    if os.path.exists(filename):
+        return filename
         
-    # Try from script directory
+    # Try from script directory as fallback
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    script_path = os.path.join(script_dir, folder, filename)
+    script_path = os.path.join(script_dir, filename)
     if os.path.exists(script_path):
         return script_path
         
-    # Fallback to root directory
-    fallback_path = os.path.join(script_dir, filename)
-    if os.path.exists(fallback_path):
-        return fallback_path
-        
     # Return the direct path anyway (will fail, but with a clearer error)
-    return direct_path
+    return filename
 
 # Load sounds with better fallback
 try:
-    point_sound = pygame.mixer.Sound(get_asset_path('point.ogg', SOUND_FOLDER))
+    point_sound = pygame.mixer.Sound(get_asset_path('point.ogg'))
     # Set a short fadeout to ensure sound doesn't overlap
     point_sound.set_volume(0.7)
 except (pygame.error, FileNotFoundError):
     try:
-        point_sound = pygame.mixer.Sound(get_asset_path('point.wav', SOUND_FOLDER))  # Try WAV as fallback
+        point_sound = pygame.mixer.Sound(get_asset_path('point.wav'))  # Try WAV as fallback
     except (pygame.error, FileNotFoundError):
         print("Warning: Could not load point sound")
         point_sound = pygame.mixer.Sound(buffer=bytes(bytearray(16)))
         point_sound.set_volume(0)
 
 try:
-    hit_sound = pygame.mixer.Sound(get_asset_path('hit.wav', SOUND_FOLDER))
+    hit_sound = pygame.mixer.Sound(get_asset_path('hit.wav'))
     hit_sound.set_volume(1.0)  # Full volume for hit sound
 except (pygame.error, FileNotFoundError):
     try:
-        hit_sound = pygame.mixer.Sound(get_asset_path('hit.ogg', SOUND_FOLDER))  # Try OGG as fallback
+        hit_sound = pygame.mixer.Sound(get_asset_path('hit.ogg'))  # Try OGG as fallback
     except (pygame.error, FileNotFoundError):
         print("Warning: Could not load hit sound")
         hit_sound = pygame.mixer.Sound(buffer=bytes(bytearray(16)))
         hit_sound.set_volume(0)
 
 try:
-    die_sound = pygame.mixer.Sound(get_asset_path('die.wav', SOUND_FOLDER))
+    die_sound = pygame.mixer.Sound(get_asset_path('die.wav'))
     die_sound.set_volume(1.0)  # Full volume for die sound
 except (pygame.error, FileNotFoundError):
     print("Warning: Could not load die.wav")
@@ -69,11 +59,11 @@ except (pygame.error, FileNotFoundError):
     die_sound.set_volume(0)
 
 try:
-    wing_sound = pygame.mixer.Sound(get_asset_path('wing.ogg', SOUND_FOLDER))
+    wing_sound = pygame.mixer.Sound(get_asset_path('wing.ogg'))
     wing_sound.set_volume(0.7)
 except (pygame.error, FileNotFoundError):
     try:
-        wing_sound = pygame.mixer.Sound(get_asset_path('wing.wav', SOUND_FOLDER))  # Try WAV as fallback
+        wing_sound = pygame.mixer.Sound(get_asset_path('wing.wav'))  # Try WAV as fallback
     except (pygame.error, FileNotFoundError):
         print("Warning: Could not load wing sound")
         wing_sound = pygame.mixer.Sound(buffer=bytes(bytearray(16)))
@@ -128,7 +118,7 @@ screen_center_x = screen_width // 2  # Center of the screen
 
 # Load game over image
 try:
-    gameover_img = pygame.image.load(get_asset_path('gameover.png', SPRITE_FOLDER))
+    gameover_img = pygame.image.load(get_asset_path('gameover.png'))
 except (pygame.error, FileNotFoundError):
     print("Warning: Could not load gameover.png")
     # Create a dummy surface
@@ -160,7 +150,7 @@ def background_setting(screen, screen_width, screen_height, scroll_speed=13, nig
     # Load the background image based on current theme
     background_filename = 'background-night.png' if night_mode else 'dayBackground.png'
     try:
-        background_img = pygame.image.load(get_asset_path(background_filename, SPRITE_FOLDER))
+        background_img = pygame.image.load(get_asset_path(background_filename))
     except pygame.error:
         print(f"Error: Could not load {background_filename}")
         pygame.quit()
@@ -171,7 +161,7 @@ def background_setting(screen, screen_width, screen_height, scroll_speed=13, nig
     
     # Load the tap to start image
     try:
-        tap_to_start_img = pygame.image.load(get_asset_path('tapToStart.png', SPRITE_FOLDER))
+        tap_to_start_img = pygame.image.load(get_asset_path('tapToStart.png'))
     except pygame.error:
         print("Error: Could not load tapToStart.png")
         pygame.quit()
@@ -184,7 +174,7 @@ def background_setting(screen, screen_width, screen_height, scroll_speed=13, nig
 
     # Load the land image
     try:
-        land_img = pygame.image.load(get_asset_path('land.png', SPRITE_FOLDER))
+        land_img = pygame.image.load(get_asset_path('land.png'))
     except pygame.error:
         print("Error: Could not load land.png")
         pygame.quit()
@@ -217,21 +207,21 @@ def bird_mechanics(screen_width, screen_height, night_mode=False):
     
     # Load the bird images for different states
     try:
-        bird_downflap_img = pygame.image.load(get_asset_path(f'{bird_prefix}downflap.png', SPRITE_FOLDER))
-        bird_midflap_img = pygame.image.load(get_asset_path(f'{bird_prefix}midflap.png', SPRITE_FOLDER))
-        bird_upflap_img = pygame.image.load(get_asset_path(f'{bird_prefix}upflap.png', SPRITE_FOLDER))
+        bird_downflap_img = pygame.image.load(get_asset_path(f'{bird_prefix}downflap.png'))
+        bird_midflap_img = pygame.image.load(get_asset_path(f'{bird_prefix}midflap.png'))
+        bird_upflap_img = pygame.image.load(get_asset_path(f'{bird_prefix}upflap.png'))
     except pygame.error:
         print(f"Error: Could not load {bird_prefix} bird images")
         # Fall back to original bluebird if the colored birds aren't found
         try:
-            bird_downflap_img = pygame.image.load(get_asset_path('bluebird-downflap.png', SPRITE_FOLDER))
-            bird_midflap_img = pygame.image.load(get_asset_path('bluebird-midflap.png', SPRITE_FOLDER))
-            bird_upflap_img = pygame.image.load(get_asset_path('bluebird-upflap.png', SPRITE_FOLDER))
+            bird_downflap_img = pygame.image.load(get_asset_path('bluebird-downflap.png'))
+            bird_midflap_img = pygame.image.load(get_asset_path('bluebird-midflap.png'))
+            bird_upflap_img = pygame.image.load(get_asset_path('bluebird-upflap.png'))
         except pygame.error:
             print("Error: Could not load bluebird images")
             # Fall back to bird.png as last resort
             try:
-                bird_downflap_img = pygame.image.load(get_asset_path('bird.png', SPRITE_FOLDER))
+                bird_downflap_img = pygame.image.load(get_asset_path('bird.png'))
                 bird_midflap_img = bird_downflap_img
                 bird_upflap_img = bird_downflap_img
             except pygame.error:
@@ -274,12 +264,12 @@ def obstacle_generation(screen_width, screen_height, land_height, night_mode=Fal
     
     # Load the pipe image
     try:
-        pipe_img = pygame.image.load(get_asset_path(pipe_filename, SPRITE_FOLDER))
+        pipe_img = pygame.image.load(get_asset_path(pipe_filename))
     except pygame.error:
         print(f"Error: Could not load {pipe_filename}")
         # Try fallback to green pipe
         try:
-            pipe_img = pygame.image.load(get_asset_path('greenpipe.png', SPRITE_FOLDER))
+            pipe_img = pygame.image.load(get_asset_path('greenpipe.png'))
         except pygame.error:
             print("Error: Could not load pipe images")
             pygame.quit()
@@ -402,7 +392,7 @@ def scoring_system(screen_width, screen_height):
     # Load all number images (0-9)
     for i in range(10):
         try:
-            number_images[i] = pygame.image.load(get_asset_path(f'{i}.png', SPRITE_FOLDER))
+            number_images[i] = pygame.image.load(get_asset_path(f'{i}.png'))
         except pygame.error:
             print(f"Warning: Could not load {i}.png")
             # Create a dummy number surface
