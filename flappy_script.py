@@ -144,10 +144,12 @@ class BackgroundManager:
                 self.land_scroll = 0
                 
     def draw(self, surface):
-        """Draw background elements."""
+        """Draw background elements (sky only)."""
         # Background
         surface.blit(self.background_img, (0, 0))
-        
+    
+    def draw_land(self, surface):
+        """Draw land element (separate from background)."""
         # Land (draw two copies for seamless scrolling)
         land_y = self.screen_height - self.land_height
         surface.blit(self.land_img, (self.land_scroll, land_y))
@@ -158,6 +160,15 @@ class BackgroundManager:
         tap_x = (self.screen_width - self.tap_to_start_img.get_width()) // 2
         tap_y = (self.screen_height - self.tap_to_start_img.get_height()) // 2
         surface.blit(self.tap_to_start_img, (tap_x, tap_y))
+        
+    def check_land_collision(self, bird):
+        """Check if the bird collides with the land."""
+        land_y = self.screen_height - self.land_height
+        
+        # Check if bird's bottom edge is below the top of the land
+        if bird.y + bird.current_img.get_height() > land_y:
+            return True, land_y
+        return False, land_y
 
 
 class Bird:
@@ -242,9 +253,17 @@ class Bird:
         # Remember previous position to determine direction
         prev_y = self.y
         
-        # Apply gravity
-        gravity_mult = 1.5 if game_state == 2 else 1  # Higher gravity in GAME_OVER
-        self.velocity += self.config.gravitational_force * gravity_mult
+        # Apply gravity as a constant value, not an acceleration
+        gravity_value = self.config.gravitational_force * (1.5 if game_state == 2 else 1)
+        
+        if self.velocity < gravity_value * 2:  # Limit the fall speed
+            self.velocity += gravity_value  # Still increment but will be limited
+        
+        # Cap maximum fall speed
+        max_fall_speed = gravity_value * 2
+        if self.velocity > max_fall_speed:
+            self.velocity = max_fall_speed
+            
         self.y += int(self.velocity)
         
         # Update bird image based on movement
@@ -536,6 +555,9 @@ class GameStateManager:
                 elif self.state == self.PLAYING:
                     bird.jump()
                     sounds['wing'].play()
+                elif self.state == self.GAME_OVER:
+                    # Move to restart state when spacebar is pressed in game over state
+                    self.state = self.RESTART
                     
         elif event.type == pygame.FINGERDOWN:
             if self.state == self.START:
@@ -545,16 +567,20 @@ class GameStateManager:
             elif self.state == self.PLAYING:
                 bird.jump()
                 sounds['wing'].play()
+            elif self.state == self.GAME_OVER:
+                # Move to restart state when screen is tapped in game over state
+                self.state = self.RESTART
                 
         return True
         
     def update(self, current_time):
         """Update game state logic."""
+        # Remove automatic timer transition
+        # Game over state will stay until player input
         if self.state == self.GAME_OVER:
             if self.gameover_time == 0:
                 self.gameover_time = current_time
-            elif current_time - self.gameover_time > 2000:  # 2 second delay
-                self.state = self.RESTART
+            # Removed the automatic transition after 2 seconds
                 
     def set_gameover(self):
         """Set the game to game over state."""
@@ -709,6 +735,21 @@ class FlappyGame:
         # Update flash effect
         self.flash.update(current_time)
         
+        # Get bird collision rect - moved outside the PLAYING state check
+        bird_collision_rect, _ = self.bird.get_rect()
+        
+        # Check collision with land - moved outside the PLAYING state check
+        ground_collision, land_y = self.background.check_land_collision(self.bird)
+        if ground_collision:
+            if self.state_manager.state != GameStateManager.GAME_OVER:
+                self.sounds['hit'].play()
+                self.sounds['die'].play()
+                self.state_manager.set_gameover()
+                self.die_sound_played = True
+            # Position bird on top of the land
+            self.bird.y = land_y - self.bird.midflap_img.get_height()
+            self.bird.velocity = 0
+        
         # Game logic when playing
         if self.state_manager.state == GameStateManager.PLAYING:
             # Update pipes and check for score increase
@@ -717,15 +758,10 @@ class FlappyGame:
                 self.score += score_increase
                 self.sounds['point'].play()
             
-            # Get bird collision rect
-            bird_collision_rect, _ = self.bird.get_rect()
-            
             # Check collision with pipes
             pipe_collision = self.pipes.check_collision(bird_collision_rect)
             
-            # Check collision with ground or ceiling
-            land_y = self.game_area_height - self.background.land_height
-            ground_collision = self.bird.y + self.bird.midflap_img.get_height() > land_y
+            # Check collision with ceiling
             ceiling_collision = self.bird.y < 0
             
             # Handle collisions
@@ -735,15 +771,6 @@ class FlappyGame:
                 self.state_manager.set_gameover()
                 self.die_sound_played = True
                 self.flash.start_flash(current_time)
-                
-            if ground_collision:
-                if self.state_manager.state != GameStateManager.GAME_OVER:
-                    self.sounds['hit'].play()
-                    self.sounds['die'].play()
-                    self.state_manager.set_gameover()
-                    self.die_sound_played = True
-                self.bird.y = land_y - self.bird.midflap_img.get_height()
-                self.bird.velocity = 0
                 
             if ceiling_collision:
                 self.bird.y = 0
@@ -761,6 +788,8 @@ class FlappyGame:
         if self.state_manager.state == GameStateManager.START:
             # Draw bird and tap to start
             self.bird.draw(self.game_surface)
+            # Add land drawing here
+            self.background.draw_land(self.game_surface)
             self.background.draw_tap_to_start(self.game_surface)
             self.score_display.draw_score(self.game_surface, 0)
             
@@ -770,6 +799,9 @@ class FlappyGame:
             
             # Draw bird
             self.bird.draw(self.game_surface)
+            
+            # Add land drawing here
+            self.background.draw_land(self.game_surface)
             
             # Draw score
             self.score_display.draw_score(self.game_surface, self.score)
