@@ -4,6 +4,27 @@ import sys
 import math
 import random
 
+# -----------------------------------------------
+# MENU SELECTION - CHANGE THIS NUMBER TO SELECT DEMO
+# 1 = Bird Mechanics Demo
+# 2 = Background Manager Demo
+# 3 = Pipes Demo
+# 4 = Overall Game
+# 5 = Exit
+# -----------------------------------------------
+SELECTED_DEMO = 2  # Default: Full game
+
+# -----------------------------------------------
+# DEMO PARAMETERS - CUSTOMIZE THESE AS NEEDED
+# -----------------------------------------------
+# Bird Mechanics Demo parameters
+BIRD_GRAVITY = 5.0
+BIRD_JUMP = -40.0
+
+# Pipes Demo parameters
+PIPE_COUNT = 3
+
+
 class GameAssetManager:
     """Handles all asset loading with proper error handling and fallbacks."""
     
@@ -847,482 +868,335 @@ class FlappyGame:
         pygame.quit()
 
 
-class MenuSystem:
-    """Handles the command-line menu interface for the game."""
-    
-    def __init__(self):
-        """Initialize the menu system."""
-        self.options = [
-            "1. Bird Mechanics Demo",
-            "2. Background Manager Demo",
-            "3. Pipes Demo",
-            "4. Overall Game",
-            "5. Exit"
-        ]
-        self.choice = None
-        
-    def display_menu(self):
-        """Display the menu options."""
-        print("\n===== FLAPPY BIRD DEMONSTRATION MENU =====")
-        for option in self.options:
-            print(option)
-        print("=========================================")
-        
-    def get_choice(self):
-        """Get user menu selection with GUI fallback."""
-        # First try to use command line input
-        try:
-            self.display_menu()
-            try:
-                choice = int(input("Enter your choice (1-5): "))
-                if 1 <= choice <= 5:
-                    self.choice = choice
-                    return choice
-                else:
-                    print("Invalid choice. Please enter a number between 1 and 5.")
-                    return self.get_gui_choice()  # Fallback to GUI
-            except (ValueError, EOFError):
-                print("Input error. Falling back to GUI menu.")
-                return self.get_gui_choice()
-        except Exception as e:
-            print(f"Error: {e}. Falling back to GUI menu.")
-            return self.get_gui_choice()
-            
-    def get_gui_choice(self):
-        """Show a GUI menu for environments where console input isn't available."""
-        # Create a simple GUI menu using pygame
-        screen_info = pygame.display.Info()
-        screen_width, screen_height = screen_info.current_w, screen_info.current_h
-        
-        # Keep aspect ratio consistent
-        if screen_width / screen_height > 1.2:
-            screen_width = int(screen_height * 1.2)
-            
-        # Set up font
-        pygame.font.init()
-        title_font = pygame.font.SysFont(None, 48)
-        option_font = pygame.font.SysFont(None, 36)
-        
-        # Define colors
-        WHITE = (255, 255, 255)
-        BLACK = (0, 0, 0)
-        GRAY = (100, 100, 100)
-        LIGHT_BLUE = (173, 216, 230)
-        
-        # Create a temporary surface for the menu
-        menu_surface = pygame.Surface((screen_width, screen_height))
-        
-        # Define option rectangles
-        option_rects = []
-        option_height = 60
-        option_spacing = 20
-        total_height = len(self.options) * (option_height + option_spacing)
-        start_y = (screen_height - total_height) // 2
-        
-        for i in range(len(self.options)):
-            rect = pygame.Rect(
-                screen_width // 4, 
-                start_y + i * (option_height + option_spacing),
-                screen_width // 2, 
-                option_height
-            )
-            option_rects.append(rect)
-        
-        # Menu loop
-        clock = pygame.time.Clock()
-        running = True
-        choice = None
-        
-        while running:
-            menu_surface.fill(BLACK)
-            
-            # Draw title
-            title_text = title_font.render("FLAPPY BIRD DEMO MENU", True, WHITE)
-            title_rect = title_text.get_rect(center=(screen_width // 2, start_y - 80))
-            menu_surface.blit(title_text, title_rect)
-            
-            # Handle events
-            mouse_pos = pygame.mouse.get_pos()
-            
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                    
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    for i, rect in enumerate(option_rects):
-                        if rect.collidepoint(mouse_pos):
-                            choice = i + 1  # 1-indexed choices
-                            running = False
-                            
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        choice = 5  # Exit option
-                        running = False
-                    elif pygame.K_1 <= event.key <= pygame.K_5:
-                        choice = event.key - pygame.K_1 + 1
-                        running = False
-                        
-            # Draw options
-            for i, rect in enumerate(option_rects):
-                # Highlight on hover
-                color = LIGHT_BLUE if rect.collidepoint(mouse_pos) else GRAY
-                pygame.draw.rect(menu_surface, color, rect, border_radius=10)
-                pygame.draw.rect(menu_surface, WHITE, rect, 2, border_radius=10)
-                
-                text = option_font.render(self.options[i], True, WHITE)
-                text_rect = text.get_rect(center=rect.center)
-                menu_surface.blit(text, text_rect)
-            
-            # Update screen
-            pygame.display.get_surface().blit(menu_surface, (0, 0))
-            pygame.display.flip()
-            clock.tick(60)
-        
-        self.choice = choice
-        return choice
-
-
 class FlappyGameDemo(FlappyGame):
-    """Extended FlappyGame class with demo capabilities."""
+    """Extended FlappyGame class with simplified demo capabilities."""
     
     def run_bird_mechanics_demo(self):
         """Run a demo showing only bird mechanics."""
-        # Get gravity and jump values using GUI instead of input()
-        gravity = 5.0  # Default
-        jump = -40.0   # Default
-        
-        # Display parameter input screen
-        try:
-            params = self.get_physics_params_gui("Bird Mechanics Demo")
-            if params:
-                gravity, jump = params
-        except Exception as e:
-            print(f"Could not get parameters via GUI: {e}")
+        # Use the hard-coded parameters
+        gravity = BIRD_GRAVITY
+        jump = BIRD_JUMP
         
         # Apply values
         self.config.gravitational_force = gravity
         self.config.jump_velocity = jump
         
-        print(f"\nUsing: Gravity = {gravity}, Jump = {jump}")
-        print("Demo controls:")
+        print(f"\nBird Mechanics Demo")
+        print(f"Using: Gravity = {gravity}, Jump = {jump}")
+        print("Controls:")
         print("- Space/Screen tap: Jump")
-        print("- ESC: Return to menu")
-        print("Starting demo in 2 seconds...")
+        print("- ESC: Exit")
         pygame.time.delay(2000)
         
-        # Rest of the method remains the same
-        # ...existing code...
+        # Reset bird position
+        self.bird.reset_position()
         
-    def get_physics_params_gui(self, title):
-        """Create a GUI for inputting physics parameters."""
-        # Colors
-        WHITE = (255, 255, 255)
-        BLACK = (0, 0, 0)
-        GRAY = (100, 100, 100)
-        LIGHT_BLUE = (173, 216, 230)
-        
-        # Create a temporary surface
-        screen = pygame.display.get_surface()
-        screen_width, screen_height = screen.get_width(), screen.get_height()
-        param_surface = pygame.Surface((screen_width, screen_height))
-        
-        # Set up fonts
-        pygame.font.init()
-        title_font = pygame.font.SysFont(None, 48)
-        label_font = pygame.font.SysFont(None, 36)
-        value_font = pygame.font.SysFont(None, 32)
-        
-        # Input boxes
-        box_width, box_height = 200, 50
-        gravity_box = pygame.Rect(
-            (screen_width - box_width) // 2, 
-            screen_height // 2 - box_height, 
-            box_width, box_height
-        )
-        jump_box = pygame.Rect(
-            (screen_width - box_width) // 2, 
-            screen_height // 2 + 50, 
-            box_width, box_height
-        )
-        
-        # Buttons
-        button_width, button_height = 140, 50
-        ok_button = pygame.Rect(
-            screen_width // 2 - button_width - 10, 
-            screen_height // 2 + 150, 
-            button_width, button_height
-        )
-        cancel_button = pygame.Rect(
-            screen_width // 2 + 10, 
-            screen_height // 2 + 150, 
-            button_width, button_height
-        )
-        
-        # Initial values
-        gravity_text = "5.0"
-        jump_text = "-40.0"
-        active_box = None
-        clock = pygame.time.Clock()
-        
-        # Input loop
+        # Run the demo loop
         running = True
-        
         while running:
-            param_surface.fill(BLACK)
-            
             # Handle events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    # Check which box was clicked
-                    if gravity_box.collidepoint(event.pos):
-                        active_box = "gravity"
-                    elif jump_box.collidepoint(event.pos):
-                        active_box = "jump"
-                    elif ok_button.collidepoint(event.pos):
-                        try:
-                            gravity_val = float(gravity_text)
-                            jump_val = float(jump_text)
-                            return gravity_val, jump_val
-                        except ValueError:
-                            pass  # Invalid input, stay in loop
-                    elif cancel_button.collidepoint(event.pos):
-                        return None
-                    else:
-                        active_box = None
-                
+                    running = False
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
-                        return None
-                    elif event.key == pygame.K_RETURN:
-                        try:
-                            gravity_val = float(gravity_text)
-                            jump_val = float(jump_text)
-                            return gravity_val, jump_val
-                        except ValueError:
-                            pass  # Invalid input, stay in loop
-                    elif event.key == pygame.K_BACKSPACE:
-                        if active_box == "gravity":
-                            gravity_text = gravity_text[:-1]
-                        elif active_box == "jump":
-                            jump_text = jump_text[:-1]
-                    else:
-                        if active_box == "gravity":
-                            gravity_text += event.unicode
-                        elif active_box == "jump":
-                            jump_text += event.unicode
+                        running = False
+                    elif event.key == pygame.K_SPACE:
+                        self.bird.jump()
+                        self.sounds['wing'].play()
+                elif event.type == pygame.FINGERDOWN:
+                    self.bird.jump()
+                    self.sounds['wing'].play()
             
-            # Draw title
-            title_text = title_font.render(title, True, WHITE)
-            title_rect = title_text.get_rect(center=(screen_width // 2, screen_height // 4))
-            param_surface.blit(title_text, title_rect)
+            # Update bird
+            current_time = pygame.time.get_ticks()
+            self.bird.update_animation(current_time)
             
-            # Draw input labels
-            gravity_label = label_font.render("Gravity:", True, WHITE)
-            param_surface.blit(gravity_label, (gravity_box.x - 150, gravity_box.y + 15))
+            # Custom bird update for demo (without game state)
+            prev_y = self.bird.y
+            self.bird.velocity += self.config.gravitational_force
+            self.bird.y += int(self.bird.velocity)
             
-            jump_label = label_font.render("Jump:", True, WHITE)
-            param_surface.blit(jump_label, (jump_box.x - 150, jump_box.y + 15))
+            # Update bird image and angle
+            if self.bird.last_action == 1:  # Just jumped
+                self.bird.current_img = self.bird.downflap_img
+                self.bird.last_action = 0
+            elif self.bird.y < prev_y:  # Moving upward
+                self.bird.current_img = self.bird.midflap_img
+            else:  # Falling
+                self.bird.current_img = self.bird.upflap_img
+                
+            if self.bird.velocity < 0:  # Moving upward
+                self.bird.angle = self.config.max_upward_angle
+            else:  # Falling
+                self.bird.angle = max(self.config.max_downward_angle, self.bird.angle - self.config.downward_rotation_speed)
             
-            # Draw input boxes
-            gravity_color = LIGHT_BLUE if active_box == "gravity" else GRAY
-            jump_color = LIGHT_BLUE if active_box == "jump" else GRAY
+            # Ceiling collision
+            if self.bird.y < 0:
+                self.bird.y = 0
+                self.bird.velocity = 0
+                
+            # Floor collision - create a virtual floor
+            floor_y = self.game_area_height - 50
+            if self.bird.y + self.bird.current_img.get_height() > floor_y:
+                self.bird.y = floor_y - self.bird.current_img.get_height()
+                self.bird.velocity = 0
             
-            pygame.draw.rect(param_surface, gravity_color, gravity_box, border_radius=5)
-            pygame.draw.rect(param_surface, WHITE, gravity_box, 2, border_radius=5)
-            pygame.draw.rect(param_surface, jump_color, jump_box, border_radius=5)
-            pygame.draw.rect(param_surface, WHITE, jump_box, 2, border_radius=5)
+            # Draw
+            self.game_surface.fill((50, 50, 50))  # Dark gray background
             
-            # Draw input text
-            gravity_surf = value_font.render(gravity_text, True, WHITE)
-            param_surface.blit(gravity_surf, (gravity_box.x + 10, gravity_box.y + 15))
+            # Draw floor line
+            pygame.draw.line(self.game_surface, (200, 200, 200), (0, floor_y), (self.screen_width, floor_y), 3)
             
-            jump_surf = value_font.render(jump_text, True, WHITE)
-            param_surface.blit(jump_surf, (jump_box.x + 10, jump_box.y + 15))
+            # Draw ceiling line
+            pygame.draw.line(self.game_surface, (200, 200, 200), (0, 0), (self.screen_width, 0), 3)
             
-            # Draw buttons
-            pygame.draw.rect(param_surface, GRAY, ok_button, border_radius=5)
-            pygame.draw.rect(param_surface, WHITE, ok_button, 2, border_radius=5)
-            pygame.draw.rect(param_surface, GRAY, cancel_button, border_radius=5)
-            pygame.draw.rect(param_surface, WHITE, cancel_button, 2, border_radius=5)
+            # Draw the bird
+            self.bird.draw(self.game_surface)
             
-            ok_text = label_font.render("OK", True, WHITE)
-            ok_rect = ok_text.get_rect(center=ok_button.center)
-            param_surface.blit(ok_text, ok_rect)
+            # Draw physics info
+            font = pygame.font.SysFont(None, 24)
+            info_text = f"Gravity: {self.config.gravitational_force}  Jump: {self.config.jump_velocity}  Velocity: {self.bird.velocity:.1f}"
+            info_surface = font.render(info_text, True, (255, 255, 255))
+            self.game_surface.blit(info_surface, (10, 10))
             
-            cancel_text = label_font.render("Cancel", True, WHITE)
-            cancel_rect = cancel_text.get_rect(center=cancel_button.center)
-            param_surface.blit(cancel_text, cancel_rect)
+            # Instructions
+            instructions = "Space/tap to jump, ESC to exit"
+            instructions_surface = font.render(instructions, True, (255, 255, 255))
+            self.game_surface.blit(instructions_surface, (10, self.game_area_height - 30))
             
-            # Update screen
-            screen.blit(param_surface, (0, 0))
+            # Update display
+            self.screen.fill((0, 0, 0))
+            self.screen.blit(self.game_surface, (0, self.game_area_y_offset))
             pygame.display.flip()
-            clock.tick(60)
+            
+            # Cap the frame rate
+            self.clock.tick(60)
+    
+    def run_background_demo(self):
+        """Run a demo showing background and land mechanics."""
+        print("\nBackground Manager Demo")
+        print("Controls:")
+        print("- Space/Screen tap: Generate new land when current segments are used up")
+        print("- ESC: Exit")
+        pygame.time.delay(2000)
         
-        return None
+        # Run the demo loop
+        running = True
+        num_land_segments = 2  # Fixed number of land segments
+        waiting_for_input = False
+        
+        # Track land positions separately for the demo
+        land_positions = []
+        for i in range(num_land_segments):
+            land_positions.append(i * self.screen_width)
+        
+        while running:
+            # Handle events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        running = False
+                    elif event.key == pygame.K_SPACE and waiting_for_input:
+                        # Add a new land segment when input is given
+                        land_positions.append(land_positions[-1] + self.screen_width)
+                        waiting_for_input = False
+                        print("New land segment generated")
+                elif event.type == pygame.FINGERDOWN and waiting_for_input:
+                    # Add a new land segment when input is given
+                    land_positions.append(land_positions[-1] + self.screen_width)
+                    waiting_for_input = False
+                    print("New land segment generated")
+            
+            # Scroll the land segments
+            for i in range(len(land_positions)):
+                land_positions[i] -= self.config.scroll_speed
+            
+            # Check if we need more land segments
+            if not waiting_for_input and max(land_positions) < self.screen_width:
+                waiting_for_input = True
+                print("Land segments running out. Tap/Space to generate more.")
+            
+            # Remove land segments that are completely off-screen
+            while land_positions and land_positions[0] < -self.screen_width:
+                land_positions.pop(0)
+            
+            # Draw
+            self.game_surface.fill((50, 50, 50))  # Dark gray background
+            
+            # Draw background
+            self.background.draw(self.game_surface)
+            
+            # Draw each land segment at its tracked position
+            land_y = self.game_area_height - self.background.land_height
+            for pos in land_positions:
+                self.game_surface.blit(self.background.land_img, (pos, land_y))
+            
+            # Draw instructions and status
+            font = pygame.font.SysFont(None, 24)
+            if waiting_for_input:
+                status_text = "Tap/Space to generate new land segment"
+                status_color = (255, 255, 0)  # Yellow for emphasis
+            else:
+                status_text = f"Land segments: {len(land_positions)}"
+                status_color = (255, 255, 255)  # White for normal status
+                
+            status_surface = font.render(status_text, True, status_color)
+            instructions = "ESC to exit"
+            instructions_surface = font.render(instructions, True, (255, 255, 255))
+            
+            # Draw text with attention-grabbing flashing effect when waiting for input
+            if waiting_for_input and (pygame.time.get_ticks() // 500) % 2 == 0:
+                self.game_surface.blit(status_surface, (10, 10))
+            elif not waiting_for_input:
+                self.game_surface.blit(status_surface, (10, 10))
+                
+            self.game_surface.blit(instructions_surface, (10, self.game_area_height - 30))
+            
+            # Update display
+            self.screen.fill((0, 0, 0))
+            self.screen.blit(self.game_surface, (0, self.game_area_y_offset))
+            pygame.display.flip()
+            
+            # Cap the frame rate
+            self.clock.tick(60)
     
     def run_pipes_demo(self):
         """Run a demo showing pipe generation and mechanics."""
-        # Default value
-        pipe_count = 3
+        # Use hard-coded parameter
+        pipe_count = PIPE_COUNT
         
-        # Try to get value using GUI
-        try:
-            value = self.get_single_value_gui("Pipes Demo", "Number of pipes:", "3")
-            if value is not None:
-                pipe_count = int(value)
-        except:
-            # Fall back to default
-            pass
-            
-        # ...existing code...
-    
-    def get_single_value_gui(self, title, label, default_value):
-        """Create a GUI for inputting a single value."""
-        # Colors
-        WHITE = (255, 255, 255)
-        BLACK = (0, 0, 0)
-        GRAY = (100, 100, 100)
-        LIGHT_BLUE = (173, 216, 230)
+        print(f"\nPipes Demo")
+        print(f"Using {pipe_count} pipes")
+        print("Controls:")
+        print("- Space/Screen tap: Generate new pipe set when current pipes exit")
+        print("- ESC: Exit")
+        pygame.time.delay(2000)
         
-        # Create a temporary surface
-        screen = pygame.display.get_surface()
-        screen_width, screen_height = screen.get_width(), screen.get_height()
-        param_surface = pygame.Surface((screen_width, screen_height))
+        # Reset state
+        self.pipes.pipes = []
         
-        # Set up fonts
-        pygame.font.init()
-        title_font = pygame.font.SysFont(None, 48)
-        label_font = pygame.font.SysFont(None, 36)
-        value_font = pygame.font.SysFont(None, 32)
+        # Generate initial pipes
+        pipe_spacing = self.screen_width / (pipe_count + 1)
+        for i in range(pipe_count):
+            # Place pipes evenly across the screen
+            pipe = self.pipes.generate_pipe()
+            pipe[0] = (i + 1) * pipe_spacing
+            self.pipes.pipes.append(pipe)
         
-        # Input box
-        box_width, box_height = 200, 50
-        input_box = pygame.Rect(
-            (screen_width - box_width) // 2, 
-            screen_height // 2, 
-            box_width, box_height
-        )
-        
-        # Buttons
-        button_width, button_height = 140, 50
-        ok_button = pygame.Rect(
-            screen_width // 2 - button_width - 10, 
-            screen_height // 2 + 100, 
-            button_width, button_height
-        )
-        cancel_button = pygame.Rect(
-            screen_width // 2 + 10, 
-            screen_height // 2 + 100, 
-            button_width, button_height
-        )
-        
-        # Initial value
-        text = default_value
-        active = True
-        clock = pygame.time.Clock()
-        
-        # Input loop
+        # Run the demo loop
         running = True
+        waiting_for_tap = False
         
         while running:
-            param_surface.fill(BLACK)
-            
             # Handle events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    # Check if input box or buttons were clicked
-                    if input_box.collidepoint(event.pos):
-                        active = True
-                    elif ok_button.collidepoint(event.pos):
-                        return text
-                    elif cancel_button.collidepoint(event.pos):
-                        return default_value
-                
+                    running = False
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
-                        return default_value
-                    elif event.key == pygame.K_RETURN:
-                        return text
-                    elif event.key == pygame.K_BACKSPACE:
-                        text = text[:-1]
-                    else:
-                        text += event.unicode
+                        running = False
+                    elif event.key == pygame.K_SPACE and waiting_for_tap:
+                        # Generate new pipes only when waiting for tap
+                        self.pipes.pipes = []
+                        for i in range(pipe_count):
+                            pipe = self.pipes.generate_pipe()
+                            pipe[0] = (i + 1) * pipe_spacing
+                            self.pipes.pipes.append(pipe)
+                        waiting_for_tap = False
+                        print("New pipe set generated")
+                elif event.type == pygame.FINGERDOWN and waiting_for_tap:
+                    # Generate new pipes only when waiting for tap
+                    self.pipes.pipes = []
+                    for i in range(pipe_count):
+                        pipe = self.pipes.generate_pipe()
+                        pipe[0] = (i + 1) * pipe_spacing
+                        self.pipes.pipes.append(pipe)
+                    waiting_for_tap = False
+                    print("New pipe set generated")
             
-            # Draw title
-            title_text = title_font.render(title, True, WHITE)
-            title_rect = title_text.get_rect(center=(screen_width // 2, screen_height // 4))
-            param_surface.blit(title_text, title_rect)
+            # Update pipe positions and check if they're all off screen
+            for pipe in self.pipes.pipes:
+                pipe[0] -= self.config.scroll_speed
             
-            # Draw input label
-            input_label = label_font.render(label, True, WHITE)
-            label_rect = input_label.get_rect(midright=(input_box.left - 20, input_box.centery))
-            param_surface.blit(input_label, label_rect)
+            # Check if all pipes are off-screen or about to be
+            all_pipes_off_screen = all(pipe[0] < -self.pipes.pipe_top_img.get_width() for pipe in self.pipes.pipes)
             
-            # Draw input box
-            box_color = LIGHT_BLUE if active else GRAY
-            pygame.draw.rect(param_surface, box_color, input_box, border_radius=5)
-            pygame.draw.rect(param_surface, WHITE, input_box, 2, border_radius=5)
+            # Set waiting_for_tap if all pipes are off screen and we're not already waiting
+            if all_pipes_off_screen and not waiting_for_tap:
+                waiting_for_tap = True
+                print("All pipes off screen. Tap/Space to generate new pipes.")
             
-            # Draw input text
-            text_surf = value_font.render(text, True, WHITE)
-            param_surface.blit(text_surf, (input_box.x + 10, input_box.y + 15))
+            # Draw
+            self.game_surface.fill((50, 50, 50))  # Dark gray background
             
-            # Draw buttons
-            pygame.draw.rect(param_surface, GRAY, ok_button, border_radius=5)
-            pygame.draw.rect(param_surface, WHITE, ok_button, 2, border_radius=5)
-            pygame.draw.rect(param_surface, GRAY, cancel_button, border_radius=5)
-            pygame.draw.rect(param_surface, WHITE, cancel_button, 2, border_radius=5)
+            # Draw background for context
+            self.background.draw(self.game_surface)
             
-            ok_text = label_font.render("OK", True, WHITE)
-            ok_rect = ok_text.get_rect(center=ok_button.center)
-            param_surface.blit(ok_text, ok_rect)
+            # Draw land for reference
+            self.background.draw_land(self.game_surface)
             
-            cancel_text = label_font.render("Cancel", True, WHITE)
-            cancel_rect = cancel_text.get_rect(center=cancel_button.center)
-            param_surface.blit(cancel_text, cancel_rect)
+            # Draw pipes
+            self.pipes.draw(self.game_surface)
             
-            # Update screen
-            screen.blit(param_surface, (0, 0))
+            # Draw instructions and status
+            font = pygame.font.SysFont(None, 24)
+            if waiting_for_tap:
+                status_text = "Tap/Space to generate new pipes"
+                status_color = (255, 255, 0)  # Yellow for emphasis
+            else:
+                status_text = "Pipes moving..."
+                status_color = (255, 255, 255)  # White for normal status
+                
+            status_surface = font.render(status_text, True, status_color)
+            instructions = "ESC to exit"
+            instructions_surface = font.render(instructions, True, (255, 255, 255))
+            
+            # Draw text with attention-grabbing flashing effect when waiting for input
+            if waiting_for_tap and (pygame.time.get_ticks() // 500) % 2 == 0:
+                self.game_surface.blit(status_surface, (10, 10))
+            elif not waiting_for_tap:
+                self.game_surface.blit(status_surface, (10, 10))
+                
+            self.game_surface.blit(instructions_surface, (10, self.game_area_height - 30))
+            
+            # Update display
+            self.screen.fill((0, 0, 0))
+            self.screen.blit(self.game_surface, (0, self.game_area_y_offset))
             pygame.display.flip()
-            clock.tick(60)
-        
-        return default_value
+            
+            # Cap the frame rate
+            self.clock.tick(60)
     
     def run_demo(self):
-        """Run the demo menu system."""
-        menu = MenuSystem()
-        
-        while True:
-            choice = menu.get_choice()
-            
-            if choice == 1:
-                self.run_bird_mechanics_demo()
-            elif choice == 2:
-                self.run_background_demo()
-            elif choice == 3:
-                self.run_pipes_demo()
-            elif choice == 4:
-                # Run the full game
-                self.run()
-                # After game exits, return to menu
-            elif choice == 5:
-                print("Exiting...")
-                break
-                
-        pygame.quit()
-        sys.exit()
+        """Run the selected demo based on SELECTED_DEMO constant."""
+        # Simple switch based on SELECTED_DEMO constant
+        if SELECTED_DEMO == 1:
+            print("Starting Bird Mechanics Demo...")
+            self.run_bird_mechanics_demo()
+        elif SELECTED_DEMO == 2:
+            print("Starting Background Manager Demo...")
+            self.run_background_demo()
+        elif SELECTED_DEMO == 3:
+            print("Starting Pipes Demo...")
+            self.run_pipes_demo()
+        elif SELECTED_DEMO == 4:
+            print("Starting Full Game...")
+            self.run()
+        elif SELECTED_DEMO == 5:
+            print("Exiting...")
+            pygame.quit()
+            sys.exit()
+        else:
+            print(f"Invalid demo selection: {SELECTED_DEMO}")
+            print("Valid options: 1=Bird, 2=Background, 3=Pipes, 4=Full Game, 5=Exit")
+            print("Defaulting to Full Game...")
+            self.run()
 
 
-# Create and run the game with demo menu
+# Create and run the game with the selected demo
 if __name__ == "__main__":
     game = FlappyGameDemo()
     game.run_demo()
