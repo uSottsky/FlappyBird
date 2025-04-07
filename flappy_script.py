@@ -67,22 +67,22 @@ class GameConfig:
         
         # Physics constants
         self.day_gravitational_force = 5
-        self.night_gravitational_force = 7
+        self.night_gravitational_force = 5
         
         # Jump strength
         self.day_jump_velocity = -40
-        self.night_jump_velocity = -45
+        self.night_jump_velocity = -40
         
         # Scroll speeds
         self.day_scroll_speed = 13
-        self.night_scroll_speed = 16
+        self.night_scroll_speed = 13
         
         # Bird sizing
         self.base_bird_size_percentage = 0.1
         
         # Animation settings
         self.max_upward_angle = 45
-        self.max_downward_angle = -45
+        self.max_downward_angle = -90
         self.rotation_speed = 3
         self.downward_rotation_speed = 10
         
