@@ -4,836 +4,813 @@ import sys
 import math
 import random
 
-# Initialize pygame
-pygame.init()
-
-# Initialize pygame mixer for sounds
-pygame.mixer.init()
-
-# Define a simpler asset loading function
-def get_asset_path(filename):
-    """Return the correct path for an asset file in the root directory."""
-    # Try direct path in the root folder
-    if os.path.exists(filename):
+class GameAssetManager:
+    """Handles all asset loading with proper error handling and fallbacks."""
+    
+    def __init__(self):
+        """Initialize the asset manager."""
+        pass
+        
+    def get_asset_path(self, filename):
+        """Return the correct path for an asset file in the root directory."""
+        # Try direct path in the root folder
+        if os.path.exists(filename):
+            return filename
+            
+        # Try from script directory as fallback
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        script_path = os.path.join(script_dir, filename)
+        if os.path.exists(script_path):
+            return script_path
+            
+        # Return the direct path anyway (will fail, but with a clearer error)
         return filename
         
-    # Try from script directory as fallback
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    script_path = os.path.join(script_dir, filename)
-    if os.path.exists(script_path):
-        return script_path
-        
-    # Return the direct path anyway (will fail, but with a clearer error)
-    return filename
-
-# Load sounds with better fallback
-try:
-    point_sound = pygame.mixer.Sound(get_asset_path('point.ogg'))
-    # Set a short fadeout to ensure sound doesn't overlap
-    point_sound.set_volume(0.7)
-except (pygame.error, FileNotFoundError):
-    try:
-        point_sound = pygame.mixer.Sound(get_asset_path('point.wav'))  # Try WAV as fallback
-    except (pygame.error, FileNotFoundError):
-        print("Warning: Could not load point sound")
-        point_sound = pygame.mixer.Sound(buffer=bytes(bytearray(16)))
-        point_sound.set_volume(0)
-
-try:
-    hit_sound = pygame.mixer.Sound(get_asset_path('hit.wav'))
-    hit_sound.set_volume(1.0)  # Full volume for hit sound
-except (pygame.error, FileNotFoundError):
-    try:
-        hit_sound = pygame.mixer.Sound(get_asset_path('hit.ogg'))  # Try OGG as fallback
-    except (pygame.error, FileNotFoundError):
-        print("Warning: Could not load hit sound")
-        hit_sound = pygame.mixer.Sound(buffer=bytes(bytearray(16)))
-        hit_sound.set_volume(0)
-
-try:
-    die_sound = pygame.mixer.Sound(get_asset_path('die.wav'))
-    die_sound.set_volume(1.0)  # Full volume for die sound
-except (pygame.error, FileNotFoundError):
-    print("Warning: Could not load die.wav")
-    die_sound = pygame.mixer.Sound(buffer=bytes(bytearray(16)))
-    die_sound.set_volume(0)
-
-try:
-    wing_sound = pygame.mixer.Sound(get_asset_path('wing.ogg'))
-    wing_sound.set_volume(0.7)
-except (pygame.error, FileNotFoundError):
-    try:
-        wing_sound = pygame.mixer.Sound(get_asset_path('wing.wav'))  # Try WAV as fallback
-    except (pygame.error, FileNotFoundError):
-        print("Warning: Could not load wing sound")
-        wing_sound = pygame.mixer.Sound(buffer=bytes(bytearray(16)))
-        wing_sound.set_volume(0)
-
-# Prevent Android keyboard from showing
-os.environ['SDL_ANDROID_HIDE_KEYBOARD'] = '1'
-
-# For Android - explicitly tell SDL to use the full screen area including notification bar
-os.environ['SDL_ANDROID_IMMERSIVE_MODE'] = '1'
-
-# Get the screen size of the device (MUST be after setting environment variables)
-info = pygame.display.Info()
-screen_width = info.current_w
-screen_height = info.current_h
-
-# If the screen is too wide relative to its height, limit the width to 412 pixels
-if screen_width / screen_height > 1.2:  # If aspect ratio is wider than 1.2:1
-    screen_width = 412
-
-# Set up the display with FULLSCREEN and SCALED flags for better Android compatibility
-screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN | pygame.SCALED)
-pygame.display.set_caption('Flappy Bird')
-
-# Variable to track which theme we're using (day/night)
-is_night_theme = True  # Default to night theme
-
-# Game speed and physics constants
-day_gravitational_force = 5
-night_gravitational_force = 7  # Higher gravity in night mode
-
-# Use current theme's gravity
-gravitational_force = night_gravitational_force if is_night_theme else day_gravitational_force
-
-# Jump strength
-day_jump_velocity = -40
-night_jump_velocity = -45  # Stronger jump in night mode
-
-# Land and pipe speed
-day_scroll_speed = 13
-night_scroll_speed = 16  # Faster scrolling in night mode
-
-# Bird sizing - base percentage of screen width for dynamic scaling
-BASE_BIRD_SIZE_PERCENTAGE = 0.1  # Bird width as percentage of screen width
-
-# Disable Android keyboard
-pygame.key.set_repeat(0)  # Disable key repeat which can trigger keyboard
-
-# Add game area variables after screen setup
-game_area_height = int(screen_height * 0.78)  # 78% of screen height
-game_area_y_offset = int(screen_height * 0.11)  # 11% from top to center the game area
-game_area_rect = pygame.Rect(0, game_area_y_offset, screen_width, game_area_height)
-
-# Declare a global gravity variable
-bird_velocity = 0  # Initial vertical velocity of the bird
-bird_angle = 0  # Current rotation angle of the bird
-max_upward_angle = 45  # Maximum rotation when jumping (positive for clockwise)
-max_downward_angle = -45  # Maximum rotation when falling (negative for anticlockwise)
-rotation_speed = 3  # How quickly the bird rotates
-downward_rotation_speed = 10  # How quickly the bird rotates downward - adjustable
-
-# Variables to ensure sounds only play once
-die_sound_played = False
-passed_pipe_ids = set()  # Store IDs of pipes we've played sounds for
-
-# Variables to track passed pipes
-passed_pipe_positions = set()  # Store positions of pipes we've already counted
-screen_center_x = screen_width // 2  # Center of the screen
-
-# Load game over image
-try:
-    gameover_img = pygame.image.load(get_asset_path('gameover.png'))
-except (pygame.error, FileNotFoundError):
-    print("Warning: Could not load gameover.png")
-    # Create a dummy surface
-    gameover_img = pygame.Surface((300, 100))
-    gameover_img.fill((255, 0, 0))
-    font = pygame.font.SysFont(None, 40)
-    text = font.render("GAME OVER", True, (255, 255, 255))
-    gameover_img.blit(text, (75, 35))
-        
-# Scale the game over image
-gameover_width = int(screen_width * 0.5)  # 50% of screen width
-gameover_height = int(gameover_width * gameover_img.get_height() / gameover_img.get_width())
-gameover_img = pygame.transform.scale(gameover_img, (gameover_width, gameover_height))
-
-def background_setting(screen, screen_width, screen_height, scroll_speed=13, night_mode=False):
-    """
-    Function to handle the background setup.
-    
-    Args:
-        screen: The pygame display surface
-        screen_width: Width of the screen
-        screen_height: Height of the screen
-        scroll_speed: Speed of land scrolling in pixels per frame
-        night_mode: Whether to use night theme assets
-        
-    Returns:
-        A tuple containing the background, tap to start, land image surfaces, and scroll speed.
-    """
-    # Load the background image based on current theme
-    background_filename = 'background-night.png' if night_mode else 'dayBackground.png'
-    try:
-        background_img = pygame.image.load(get_asset_path(background_filename))
-    except pygame.error:
-        print(f"Error: Could not load {background_filename}")
-        pygame.quit()
-        sys.exit()
-
-    # Scale the background to fit the screen
-    background_img = pygame.transform.scale(background_img, (screen_width, screen_height))
-    
-    # Load the tap to start image
-    try:
-        tap_to_start_img = pygame.image.load(get_asset_path('tapToStart.png'))
-    except pygame.error:
-        print("Error: Could not load tapToStart.png")
-        pygame.quit()
-        sys.exit()
-            
-    # Scale the tap to start image to be a good size for the screen (half the width)
-    tap_width = screen_width // 2
-    tap_height = int(tap_width * tap_to_start_img.get_height() / tap_to_start_img.get_width())
-    tap_to_start_img = pygame.transform.scale(tap_to_start_img, (tap_width, tap_height))
-
-    # Load the land image
-    try:
-        land_img = pygame.image.load(get_asset_path('land.png'))
-    except pygame.error:
-        print("Error: Could not load land.png")
-        pygame.quit()
-        sys.exit()
-            
-    # Scale the land image to fit the width of the screen and about 10% of the height
-    land_height = int(screen_height * 0.17)
-    land_img = pygame.transform.scale(land_img, (screen_width, land_height))
-
-    return background_img, tap_to_start_img, land_img, scroll_speed
-
-def bird_mechanics(screen_width, screen_height, night_mode=False):
-    """
-    Function to handle the bird setup and mechanics.
-    
-    Args:
-        screen_width: Width of the screen
-        screen_height: Height of the screen
-        night_mode: Whether to use night theme assets
-        
-    Returns:
-        A tuple containing the bird image surfaces, its initial x and y positions, and its size.
-    """
-    # Choose the bird color based on theme
-    bird_prefix = ""
-    if night_mode:
-        bird_prefix = "redbird-"
-    else:
-        bird_prefix = "yellowbird-"
-    
-    # Load the bird images for different states
-    try:
-        bird_downflap_img = pygame.image.load(get_asset_path(f'{bird_prefix}downflap.png'))
-        bird_midflap_img = pygame.image.load(get_asset_path(f'{bird_prefix}midflap.png'))
-        bird_upflap_img = pygame.image.load(get_asset_path(f'{bird_prefix}upflap.png'))
-    except pygame.error:
-        print(f"Error: Could not load {bird_prefix} bird images")
-        # Fall back to original bluebird if the colored birds aren't found
+    def load_image(self, filename, fallback=None):
+        """Load an image with fallback options."""
         try:
-            bird_downflap_img = pygame.image.load(get_asset_path('bluebird-downflap.png'))
-            bird_midflap_img = pygame.image.load(get_asset_path('bluebird-midflap.png'))
-            bird_upflap_img = pygame.image.load(get_asset_path('bluebird-upflap.png'))
-        except pygame.error:
-            print("Error: Could not load bluebird images")
-            # Fall back to bird.png as last resort
-            try:
-                bird_downflap_img = pygame.image.load(get_asset_path('bird.png'))
-                bird_midflap_img = bird_downflap_img
-                bird_upflap_img = bird_downflap_img
-            except pygame.error:
-                print("Error: Could not load any bird images")
-                pygame.quit()
-                sys.exit()
-
-    # Calculate bird size dynamically based on screen width
-    target_bird_width = int(screen_width * BASE_BIRD_SIZE_PERCENTAGE)
-    scale_factor = target_bird_width / bird_downflap_img.get_width()
-    
-    # Scale all bird images based on the dynamic scale factor
-    bird_downflap_img = pygame.transform.scale(bird_downflap_img, 
-                                              (target_bird_width, 
-                                               int(bird_downflap_img.get_height() * scale_factor)))
-    bird_midflap_img = pygame.transform.scale(bird_midflap_img, 
-                                             (target_bird_width, 
-                                              int(bird_midflap_img.get_height() * scale_factor)))
-    bird_upflap_img = pygame.transform.scale(bird_upflap_img, 
-                                            (target_bird_width, 
-                                             int(bird_upflap_img.get_height() * scale_factor)))
-
-    # Bird position variables - x is centered, y is higher from center
-    bird_x = screen_width // 2 - bird_downflap_img.get_width() // 2
-    bird_y = (screen_height // 2 - bird_downflap_img.get_height() // 2) - int(screen_height * 0.10)
-
-    return (bird_downflap_img, bird_midflap_img, bird_upflap_img), bird_x, bird_y
-
-def obstacle_generation(screen_width, screen_height, land_height, night_mode=False):
-    """
-    Function to handle pipe obstacle generation and management.
-    
-    Args:
-        screen_width: Width of the screen
-        screen_height: Height of the screen
-        land_height: Height of the land element
-        night_mode: Whether to use night theme assets
-        
-    Returns:
-        A tuple containing the pipe image surfaces and initial pipe data.
-    """
-    # Choose pipe image based on theme
-    pipe_filename = 'pipe-red.png' if night_mode else 'greenpipe.png'
-    
-    # Load the pipe image
-    try:
-        pipe_img = pygame.image.load(get_asset_path(pipe_filename))
-    except pygame.error:
-        print(f"Error: Could not load {pipe_filename}")
-        # Try fallback to green pipe
+            image = pygame.image.load(self.get_asset_path(filename))
+            return image
+        except (pygame.error, FileNotFoundError):
+            print(f"Warning: Could not load {filename}")
+            if fallback:
+                return self.load_image(fallback)
+            else:
+                # Create a dummy surface as last resort
+                dummy = pygame.Surface((100, 100))
+                dummy.fill((255, 0, 0))
+                return dummy
+                
+    def load_sound(self, filename, volume=1.0, fallback=None):
+        """Load a sound with fallback options."""
         try:
-            pipe_img = pygame.image.load(get_asset_path('greenpipe.png'))
-        except pygame.error:
-            print("Error: Could not load pipe images")
-            pygame.quit()
-            sys.exit()
+            sound = pygame.mixer.Sound(self.get_asset_path(filename))
+            sound.set_volume(volume)
+            return sound
+        except (pygame.error, FileNotFoundError):
+            if fallback:
+                return self.load_sound(fallback, volume)
+            else:
+                print(f"Warning: Could not load {filename}")
+                dummy_sound = pygame.mixer.Sound(buffer=bytes(bytearray(16)))
+                dummy_sound.set_volume(0)
+                return dummy_sound
+
+
+class GameConfig:
+    """Manages all game configuration and theme-specific settings."""
+    
+    def __init__(self, is_night_theme=True):
+        """Initialize game configuration with theme settings."""
+        # Theme settings
+        self.is_night_theme = is_night_theme
+        
+        # Physics constants
+        self.day_gravitational_force = 5
+        self.night_gravitational_force = 7
+        
+        # Jump strength
+        self.day_jump_velocity = -40
+        self.night_jump_velocity = -45
+        
+        # Scroll speeds
+        self.day_scroll_speed = 13
+        self.night_scroll_speed = 16
+        
+        # Bird sizing
+        self.base_bird_size_percentage = 0.1
+        
+        # Animation settings
+        self.max_upward_angle = 45
+        self.max_downward_angle = -45
+        self.rotation_speed = 3
+        self.downward_rotation_speed = 10
+        
+        # Update current settings based on theme
+        self.update_theme_settings()
+        
+    def update_theme_settings(self):
+        """Update game settings based on current theme."""
+        self.gravitational_force = self.night_gravitational_force if self.is_night_theme else self.day_gravitational_force
+        self.jump_velocity = self.night_jump_velocity if self.is_night_theme else self.day_jump_velocity
+        self.scroll_speed = self.night_scroll_speed if self.is_night_theme else self.day_scroll_speed
+        
+    def toggle_theme(self):
+        """Toggle between day and night themes."""
+        self.is_night_theme = not self.is_night_theme
+        self.update_theme_settings()
+
+
+class BackgroundManager:
+    """Manages background, land and other environment elements."""
+    
+    def __init__(self, assets, config, screen_width, screen_height):
+        """Initialize background manager."""
+        self.assets = assets
+        self.config = config
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        self.land_height = int(screen_height * 0.17)
+        
+        # Load assets
+        self.load_assets()
+        
+        # Scrolling variables
+        self.land_scroll = 0
+        
+    def load_assets(self):
+        """Load background assets based on current theme."""
+        # Background
+        bg_filename = 'background-night.png' if self.config.is_night_theme else 'dayBackground.png'
+        self.background_img = self.assets.load_image(bg_filename)
+        self.background_img = pygame.transform.scale(self.background_img, (self.screen_width, self.screen_height))
+        
+        # Tap to start
+        self.tap_to_start_img = self.assets.load_image('tapToStart.png')
+        tap_width = self.screen_width // 2
+        tap_height = int(tap_width * self.tap_to_start_img.get_height() / self.tap_to_start_img.get_width())
+        self.tap_to_start_img = pygame.transform.scale(self.tap_to_start_img, (tap_width, tap_height))
+        
+        # Land
+        self.land_img = self.assets.load_image('land.png')
+        self.land_img = pygame.transform.scale(self.land_img, (self.screen_width, self.land_height))
+        
+    def update(self, dt, game_state):
+        """Update background elements."""
+        # Only scroll in certain game states
+        if game_state != 2:  # Not in GAME_OVER state
+            self.land_scroll -= self.config.scroll_speed
+            if self.land_scroll <= -self.screen_width:
+                self.land_scroll = 0
+                
+    def draw(self, surface):
+        """Draw background elements."""
+        # Background
+        surface.blit(self.background_img, (0, 0))
+        
+        # Land (draw two copies for seamless scrolling)
+        land_y = self.screen_height - self.land_height
+        surface.blit(self.land_img, (self.land_scroll, land_y))
+        surface.blit(self.land_img, (self.land_scroll + self.screen_width, land_y))
+        
+    def draw_tap_to_start(self, surface):
+        """Draw tap to start message."""
+        tap_x = (self.screen_width - self.tap_to_start_img.get_width()) // 2
+        tap_y = (self.screen_height - self.tap_to_start_img.get_height()) // 2
+        surface.blit(self.tap_to_start_img, (tap_x, tap_y))
+
+
+class Bird:
+    """Manages bird animations, physics and rendering."""
+    
+    def __init__(self, assets, config, screen_width, screen_height):
+        """Initialize bird object."""
+        self.assets = assets
+        self.config = config
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        
+        # Physics variables
+        self.velocity = 0
+        self.angle = 0
+        
+        # Animation state
+        self.current_frame = 0
+        self.animation_timer = 0
+        self.animation_speed = 100  # milliseconds per frame
+        self.last_action = 0  # 0 = neutral, 1 = jump, -1 = falling
+        
+        # Load bird images and set position
+        self.load_images()
+        self.reset_position()
+        
+    def load_images(self):
+        """Load bird images based on theme."""
+        # Choose bird color based on theme
+        bird_prefix = "redbird-" if self.config.is_night_theme else "yellowbird-"
+        
+        # Load bird images
+        self.downflap_img = self.assets.load_image(f'{bird_prefix}downflap.png', 'bluebird-downflap.png')
+        self.midflap_img = self.assets.load_image(f'{bird_prefix}midflap.png', 'bluebird-midflap.png')
+        self.upflap_img = self.assets.load_image(f'{bird_prefix}upflap.png', 'bluebird-upflap.png')
+        
+        # Scale the bird images
+        target_width = int(self.screen_width * self.config.base_bird_size_percentage)
+        scale_factor = target_width / self.downflap_img.get_width()
+        
+        self.downflap_img = pygame.transform.scale(self.downflap_img, 
+                                                  (target_width, 
+                                                   int(self.downflap_img.get_height() * scale_factor)))
+        self.midflap_img = pygame.transform.scale(self.midflap_img, 
+                                                 (target_width, 
+                                                  int(self.midflap_img.get_height() * scale_factor)))
+        self.upflap_img = pygame.transform.scale(self.upflap_img, 
+                                                (target_width, 
+                                                 int(self.upflap_img.get_height() * scale_factor)))
+                                                 
+        # Set up animation frames
+        self.animation_frames = [self.downflap_img, self.midflap_img, self.upflap_img, self.midflap_img]
+        self.current_img = self.midflap_img
+        
+    def reset_position(self):
+        """Reset bird to starting position."""
+        self.x = self.screen_width // 2 - self.midflap_img.get_width() // 2
+        self.y = (self.screen_height // 2 - self.midflap_img.get_height() // 2) - int(self.screen_height * 0.10)
+        self.velocity = 0
+        self.angle = 0
+        self.current_img = self.midflap_img
+        
+    def jump(self):
+        """Make the bird jump."""
+        self.velocity = self.config.jump_velocity
+        self.angle = self.config.max_upward_angle
+        self.current_img = self.downflap_img
+        self.last_action = 1
+        
+    def update_animation(self, current_time):
+        """Update bird animation frame."""
+        if current_time - self.animation_timer > self.animation_speed:
+            self.animation_timer = current_time
+            self.current_frame = (self.current_frame + 1) % len(self.animation_frames)
             
-    # Scale the pipe image to appropriate size
-    pipe_width = int(screen_width * 0.15)  # 15% of screen width
-    pipe_height = int(pipe_img.get_height() * (pipe_width / pipe_img.get_width()))
-    
-    pipe_img = pygame.transform.scale(pipe_img, (pipe_width, pipe_height))
-    
-    # Create the top pipe by rotating the bottom pipe 180 degrees
-    pipe_top_img = pygame.transform.rotate(pipe_img, 180)
-    pipe_bottom_img = pipe_img  # Bottom pipe is the original image
-    
-    # Initialize pipe data (x position, height)
-    pipe_gap = int(screen_height * 0.17)  # Reduced gap between pipes
-    pipes = []
-    
-    return pipe_top_img, pipe_bottom_img, pipes, pipe_gap
-
-def generate_pipe(screen_width, screen_height, land_height, pipe_gap):
-    """
-    Generate a new pipe position where pipes are anchored to ceiling and land
-    
-    Args:
-        screen_width: Width of the screen
-        screen_height: Height of the screen
-        land_height: Height of the land element
-        pipe_gap: Gap between top and bottom pipes
-        
-    Returns:
-        A list containing pipe x position and gap y position
-    """
-    # Position the pipe beyond the right edge of the screen
-    pipe_x = screen_width
-    
-    # Calculate more strict boundaries for the gap position
-    usable_height = screen_height - land_height
-    
-    # Ensure the gap is never too close to the top or bottom
-    # At least 25% from top and 25% from bottom of usable area
-    min_gap_y = int(usable_height * 0.25)
-    max_gap_y = int(usable_height * 0.75)
-    
-    # Center of the gap
-    gap_y = random.randint(min_gap_y, max_gap_y)
-    
-    return [pipe_x, gap_y]
-
-def collision_detection(bird_rect, pipes, pipe_top_img, pipe_bottom_img, pipe_gap, passed_pipes):
-    """
-    Handle collision detection between bird and pipes.
-    """
-    collision = False
-    
-    # Create a smaller bird collision rect for more accurate detection
-    bird_inset = int(bird_rect.width * 0.1)  # 10% inset
-    adjusted_bird_rect = pygame.Rect(
-        bird_rect.x + bird_inset,
-        bird_rect.y + bird_inset,
-        bird_rect.width - (bird_inset * 2),
-        bird_rect.height - (bird_inset * 2)
-    )
-    
-    for pipe_index, pipe in enumerate(pipes):
-        # Calculate pipe positions
-        gap_center_y = pipe[1]
-        half_gap = pipe_gap // 2
-        
-        # Top pipe position
-        top_pipe_y = gap_center_y - half_gap - pipe_top_img.get_height()
-        
-        # Make collision rect better aligned with visual pipe edges
-        pipe_width = pipe_top_img.get_width()
-        pipe_height = pipe_top_img.get_height()
-        
-        # Create more precise collision rects for pipes - reduce horizontal inset
-        # to make horizontal collision more accurate
-        inset_x = int(pipe_width * 0.05)  # Reduced from 10% to 5% for better horizontal collision
-        inset_y = 0  # Remove vertical inset completely at the gap edges
-        
-        # Extend the collision box slightly beyond visual pipes to ensure proper collision
-        top_pipe_rect = pygame.Rect(
-            pipe[0] + inset_x, 
-            top_pipe_y, 
-            pipe_width - (inset_x * 2), 
-            pipe_height
-        )
-        
-        # Bottom pipe position
-        bottom_pipe_y = gap_center_y + half_gap
-        bottom_pipe_rect = pygame.Rect(
-            pipe[0] + inset_x, 
-            bottom_pipe_y, 
-            pipe_width - (inset_x * 2), 
-            pipe_height
-        )
-        
-        # Check for collision with pipes
-        if adjusted_bird_rect.colliderect(top_pipe_rect) or adjusted_bird_rect.colliderect(bottom_pipe_rect):
-            collision = True
+    def update(self, dt, game_state):
+        """Update bird physics and animation."""
+        if game_state == 0:  # START state
+            # Just animate without physics
+            return
             
-    return collision
-
-def scoring_system(screen_width, screen_height):
-    """
-    Set up the scoring system with number images.
-    
-    Args:
-        screen_width: Width of the screen
-        screen_height: Height of the screen
+        # Remember previous position to determine direction
+        prev_y = self.y
         
-    Returns:
-        A dictionary containing number images from 0-9
-    """
-    # Create a dictionary to store number images
-    number_images = {}
-    
-    # Load all number images (0-9)
-    for i in range(10):
-        try:
-            number_images[i] = pygame.image.load(get_asset_path(f'{i}.png'))
-        except pygame.error:
-            print(f"Warning: Could not load {i}.png")
-            # Create a dummy number surface
-            font = pygame.font.SysFont(None, 40)
-            number_images[i] = font.render(str(i), True, (255, 255, 255))
-    
-    # Scale all number images to appropriate size (increased from 5% to 8% of screen height)
-    digit_height = int(screen_height * 0.08)
-    
-    for i in range(10):
-        original_ratio = number_images[i].get_width() / number_images[i].get_height()
-        digit_width = int(digit_height * original_ratio)
-        number_images[i] = pygame.transform.scale(number_images[i], (digit_width, digit_height))
-    
-    return number_images
-
-def draw_score(game_surface, number_images, score, screen_width):
-    """
-    Draw the current score on the screen using number images.
-    
-    Args:
-        game_surface: The surface to draw on
-        number_images: Dictionary of number images
-        score: Current score to display
-        screen_width: Width of the screen
-    """
-    # Convert score to string to get individual digits
-    score_str = str(score)
-    
-    # Calculate total width of all digits to center
-    total_width = sum(number_images[int(digit)].get_width() for digit in score_str)
-    
-    # Position the score in the upper part of the screen (3% from top instead of 10%)
-    x_pos = (screen_width - total_width) // 2
-    y_pos = int(game_area_height * 0.03)
-    
-    # Draw each digit
-    for digit in score_str:
-        digit_img = number_images[int(digit)]
-        game_surface.blit(digit_img, (x_pos, y_pos))
-        x_pos += digit_img.get_width()
-
-# Create a surface for the game area
-game_surface = pygame.Surface((screen_width, game_area_height))
-
-# Initialize background and bird mechanics adjusted for game area
-background_img, tap_to_start_img, land_img, land_scroll_speed = background_setting(screen, screen_width, game_area_height, night_mode=is_night_theme)
-bird_imgs, bird_x_orig, bird_y_orig = bird_mechanics(screen_width, game_area_height, night_mode=is_night_theme)
-bird_downflap_img, bird_midflap_img, bird_upflap_img = bird_imgs
-
-# Add collision flash effect surface
-flash_surface = pygame.Surface((screen_width, game_area_height), pygame.SRCALPHA)
-flash_alpha = 0  # Start with fully transparent
-flash_duration = 100  # Flash duration in milliseconds
-flash_start_time = 0  # When the flash effect started
-
-# Track the current bird state
-current_bird_img = bird_midflap_img
-last_bird_action = 0  # 0 = neutral, 1 = jump/touch, -1 = falling
-
-# Add flapping animation variables for start screen
-flap_animation_timer = 0
-flap_animation_speed = 100  # milliseconds per frame
-flap_animation_frames = [bird_downflap_img, bird_midflap_img, bird_upflap_img, bird_midflap_img]  # Animation sequence
-current_flap_frame = 0
-
-# Adjust bird position for game area
-bird_x = bird_x_orig
-bird_y = bird_y_orig 
-
-# Initialize scoring system
-number_images = scoring_system(screen_width, game_area_height)
-
-# Initialize obstacle related items
-land_height = int(game_area_height * 0.17)
-pipe_top_img, pipe_bottom_img, pipes, pipe_gap = obstacle_generation(screen_width, game_area_height, land_height, night_mode=is_night_theme)
-pipe_frequency = 3000  # New pipe every 1.5 seconds
-last_pipe = pygame.time.get_ticks() - pipe_frequency  # Time since last pipe
-pipe_speed = land_scroll_speed  # Same speed as land scrolling
-
-# Bird animation variables
-bird_amplitude = 50  # Amplitude of the floating motion
-bird_frequency = 2  # Frequency of the floating motion
-clock = pygame.time.Clock()
-
-# Land scrolling variables
-land_scroll = 0
-
-# Game states
-GAME_START = 0
-GAME_PLAYING = 1
-GAME_OVER = 2
-GAME_RESTART = 3  # New state for showing game over message
-game_state = GAME_START
-gameover_time = 0  # Track when to restart game
-
-# Passed pipes for scoring
-passed_pipes = set()
-score = 0
-
-# Initialize score tracking time to handle point sound timing
-score_time = 0
-point_sound_played = False
-
-# Game loop
-running = True
-start_time = pygame.time.get_ticks()
-while running:
-    # Get current time for sound timing
-    current_time = pygame.time.get_ticks()
-    
-    # Handle events differently based on game state
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:  # Allow ESC key to exit
-                running = False
-            elif event.key == pygame.K_SPACE:  # Add spacebar as alternative control
-                if game_state == GAME_START:
-                    # Change to playing state when spacebar is pressed
-                    game_state = GAME_PLAYING
-                    jump_velocity = night_jump_velocity if is_night_theme else day_jump_velocity
-                    bird_velocity = jump_velocity  # Initial jump when starting
-                    bird_angle = max_upward_angle
-                    wing_sound.play()  # Play wing sound on touch
-                    current_bird_img = bird_downflap_img  # Show downflap on touch
-                    last_bird_action = 1  # Track that we just jumped
-                elif game_state == GAME_PLAYING:
-                    # Make the bird jump when spacebar is pressed
-                    jump_velocity = night_jump_velocity if is_night_theme else day_jump_velocity
-                    bird_velocity = jump_velocity
-                    bird_angle = max_upward_angle
-                    wing_sound.play()  # Play wing sound on touch
-                    current_bird_img = bird_downflap_img  # Show downflap on touch
-                    last_bird_action = 1  # Track that we just jumped
-        elif event.type == pygame.FINGERDOWN:
-            if game_state == GAME_START:
-                # Change to playing state when screen is touched
-                game_state = GAME_PLAYING
-                jump_velocity = night_jump_velocity if is_night_theme else day_jump_velocity
-                bird_velocity = jump_velocity  # Initial jump when starting
-                bird_angle = max_upward_angle
-                wing_sound.play()  # Play wing sound on touch
-                current_bird_img = bird_downflap_img  # Show downflap on touch
-                last_bird_action = 1  # Track that we just jumped
-            elif game_state == GAME_PLAYING:
-                # Make the bird jump when the screen is touched
-                jump_velocity = night_jump_velocity if is_night_theme else day_jump_velocity
-                bird_velocity = jump_velocity
-                bird_angle = max_upward_angle
-                wing_sound.play()  # Play wing sound on touch
-                current_bird_img = bird_downflap_img  # Show downflap on touch
-                last_bird_action = 1  # Track that we just jumped
-
-    # Draw the background
-    game_surface.blit(background_img, (0, 0))
-
-    if game_state == GAME_START:
-        # Update flapping animation in start screen
-        if current_time - flap_animation_timer > flap_animation_speed:
-            flap_animation_timer = current_time
-            current_flap_frame = (current_flap_frame + 1) % len(flap_animation_frames)
+        # Apply gravity
+        gravity_mult = 1.5 if game_state == 2 else 1  # Higher gravity in GAME_OVER
+        self.velocity += self.config.gravitational_force * gravity_mult
+        self.y += int(self.velocity)
         
-        # Draw the bird in the center with the current animation frame
-        game_surface.blit(flap_animation_frames[current_flap_frame], (bird_x, bird_y))
-        
-        # Center the tap to start image on screen
-        tap_x = (screen_width - tap_to_start_img.get_width()) // 2
-        tap_y = (game_area_height - tap_to_start_img.get_height()) // 2
-        game_surface.blit(tap_to_start_img, (tap_x, tap_y))
-        
-        # Show initial score of 0 on the start screen
-        draw_score(game_surface, number_images, 0, screen_width)
-        
-        # Scroll the land even in start screen
-        land_scroll -= land_scroll_speed
-        if land_scroll <= -screen_width:
-            land_scroll = 0
-            
-        # Draw two copies of the land for infinite scrolling
-        land_y = game_area_height - land_img.get_height()
-        game_surface.blit(land_img, (land_scroll, land_y))
-        game_surface.blit(land_img, (land_scroll + screen_width, land_y))
-    elif game_state == GAME_PLAYING:
-        # Apply gravity and update bird position
-        prev_y = bird_y  # Remember previous position to determine direction
-        
-        bird_velocity += gravitational_force
-        bird_y += int(bird_velocity)
-
         # Update bird image based on movement
-        if last_bird_action == 1:  # Just jumped
-            current_bird_img = bird_downflap_img
-            last_bird_action = 0  # Reset after using downflap
-        elif bird_y < prev_y:  # Moving upward (y decreasing)
-            current_bird_img = bird_midflap_img
-        else:  # Falling downward
-            current_bird_img = bird_upflap_img
+        if self.last_action == 1:  # Just jumped
+            self.current_img = self.downflap_img
+            self.last_action = 0
+        elif self.y < prev_y:  # Moving upward
+            self.current_img = self.midflap_img
+        else:  # Falling
+            self.current_img = self.upflap_img
+            
+        # Update bird angle
+        if game_state == 2:  # GAME_OVER
+            # Bird always rotates downward
+            self.angle = max(self.config.max_downward_angle, self.angle - self.config.downward_rotation_speed * 2)
+        else:
+            if self.velocity < 0:  # Moving upward
+                self.angle = self.config.max_upward_angle
+            else:  # Falling
+                self.angle = max(self.config.max_downward_angle, self.angle - self.config.downward_rotation_speed)
+                
+    def get_rect(self):
+        """Get the collision rectangle for the bird."""
+        # Rotate the current image
+        rotated_bird = pygame.transform.rotate(self.current_img, self.angle)
+        
+        # Get the rect of the rotated image
+        rect = rotated_bird.get_rect(center=(self.x + self.midflap_img.get_width()//2, 
+                                           self.y + self.midflap_img.get_height()//2))
+                                           
+        # Create a smaller collision rect for more accurate detection
+        inset = int(rect.width * 0.1)  # 10% inset
+        collision_rect = pygame.Rect(
+            rect.x + inset,
+            rect.y + inset,
+            rect.width - (inset * 2),
+            rect.height - (inset * 2)
+        )
+        
+        return collision_rect, rect
+        
+    def draw(self, surface):
+        """Draw the bird with current rotation."""
+        # Rotate the current image
+        rotated_bird = pygame.transform.rotate(self.current_img, self.angle)
+        
+        # Get the rect of the rotated image
+        rect = rotated_bird.get_rect(center=(self.x + self.midflap_img.get_width()//2, 
+                                           self.y + self.midflap_img.get_height()//2))
+                                           
+        # Draw the rotated bird
+        surface.blit(rotated_bird, rect.topleft)
 
-        # Calculate land position for collision detection
-        land_y = game_area_height - land_img.get_height()
-        
-        # Adjust bird angle based on velocity
-        if bird_velocity < 0:  # Bird is moving upward
-            bird_angle = max_upward_angle
-        else:  # Bird is falling
-            # Gradually rotate anticlockwise as the bird falls
-            bird_angle = max(max_downward_angle, bird_angle - downward_rotation_speed)
 
-        # Rotate the bird image
-        rotated_bird = pygame.transform.rotate(current_bird_img, bird_angle)
+class PipeManager:
+    """Manages pipe obstacles, generation, movement and collision detection."""
+    
+    def __init__(self, assets, config, screen_width, screen_height):
+        """Initialize pipe manager."""
+        self.assets = assets
+        self.config = config
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        self.land_height = int(screen_height * 0.17)
         
-        # Get the rect of the rotated image to ensure the bird stays centered
-        rotated_rect = rotated_bird.get_rect(center=(bird_x + bird_midflap_img.get_width()//2, 
-                                                    bird_y + bird_midflap_img.get_height()//2))
+        # Pipe variables
+        self.pipes = []
+        self.pipe_gap = int(screen_height * 0.17)  # Gap between pipes
+        self.pipe_frequency = 3000  # New pipe every 3 seconds
+        self.last_pipe = pygame.time.get_ticks() - self.pipe_frequency  # Time since last pipe
         
-        # Generate pipes
+        # Load pipe images
+        self.load_images()
+        
+    def load_images(self):
+        """Load pipe images based on theme."""
+        # Choose pipe image based on theme
+        pipe_filename = 'pipe-red.png' if self.config.is_night_theme else 'greenpipe.png'
+        
+        # Load pipe image
+        self.pipe_img = self.assets.load_image(pipe_filename, 'greenpipe.png')
+        
+        # Scale pipe image
+        pipe_width = int(self.screen_width * 0.15)  # 15% of screen width
+        pipe_height = int(self.pipe_img.get_height() * (pipe_width / self.pipe_img.get_width()))
+        self.pipe_img = pygame.transform.scale(self.pipe_img, (pipe_width, pipe_height))
+        
+        # Create top pipe by rotating the bottom pipe
+        self.pipe_top_img = pygame.transform.rotate(self.pipe_img, 180)
+        self.pipe_bottom_img = self.pipe_img
+        
+    def generate_pipe(self):
+        """Generate a new pipe with random gap position."""
+        # Position the pipe beyond the right edge of the screen
+        pipe_x = self.screen_width
+        
+        # Calculate boundaries for the gap position
+        usable_height = self.screen_height - self.land_height
+        
+        # Ensure the gap is never too close to the top or bottom
+        min_gap_y = int(usable_height * 0.25)
+        max_gap_y = int(usable_height * 0.75)
+        
+        # Center of the gap
+        gap_y = random.randint(min_gap_y, max_gap_y)
+        
+        return [pipe_x, gap_y]
+        
+    def update(self, dt, game_state):
+        """Update pipe positions and generate new pipes."""
+        if game_state != 1:  # Only move pipes in PLAYING state
+            return 0  # No score increase
+            
+        score_increase = 0
+        
+        # Generate new pipes on a timer
         time_now = pygame.time.get_ticks()
-        if time_now - last_pipe > pipe_frequency:
-            pipes.append(generate_pipe(screen_width, game_area_height, land_img.get_height(), pipe_gap))
-            last_pipe = time_now
-        
-        # Update pipe positions and handle removal of off-screen pipes
+        if time_now - self.last_pipe > self.pipe_frequency:
+            self.pipes.append(self.generate_pipe())
+            self.last_pipe = time_now
+            
+        # Update pipe positions and handle removal
         pipe_removal = []
-        for pipe_index, pipe in enumerate(pipes):
+        for pipe_index, pipe in enumerate(self.pipes):
             # Move pipe to the left
-            pipe[0] -= pipe_speed
+            pipe[0] -= self.config.scroll_speed
             
             # Score when pipe passes the middle of the screen
-            pipe_center = pipe[0] + (pipe_top_img.get_width() / 2)
-            if pipe_center <= screen_width / 2 and pipe_center > (screen_width / 2) - pipe_speed:
-                # Pipe is passing the center of the screen right now
-                if game_state == GAME_PLAYING:
-                    # Play point sound and increment score
-                    point_sound.play()
-                    score += 1
-            
-            # Remove pipes that have moved off the left edge of the screen
-            if pipe[0] < -pipe_top_img.get_width():
+            pipe_center = pipe[0] + (self.pipe_top_img.get_width() / 2)
+            if pipe_center <= self.screen_width / 2 and pipe_center > (self.screen_width / 2) - self.config.scroll_speed:
+                score_increase = 1
+                
+            # Remove pipes that have moved off the left edge
+            if pipe[0] < -self.pipe_top_img.get_width():
                 pipe_removal.append(pipe_index)
-        
-        # Remove pipes that are off screen
+                
+        # Remove off-screen pipes
         for index in sorted(pipe_removal, reverse=True):
-            pipes.pop(index)
+            self.pipes.pop(index)
+            
+        return score_increase
         
-        # Draw pipes
-        for pipe in pipes:
+    def check_collision(self, bird_rect):
+        """Check if the bird collides with any pipes."""
+        for pipe in self.pipes:
             # Calculate gap position
             gap_center_y = pipe[1]
-            half_gap = pipe_gap // 2
+            half_gap = self.pipe_gap // 2
             
-            # Top pipe (upside down) - anchored to the ceiling
-            # The bottom of the top pipe should be at gap_center_y - half_gap
-            top_pipe_y = gap_center_y - half_gap - pipe_top_img.get_height()
-            game_surface.blit(pipe_top_img, (pipe[0], top_pipe_y))
+            # Top pipe position
+            top_pipe_y = gap_center_y - half_gap - self.pipe_top_img.get_height()
             
-            # Bottom pipe - anchored to the ground
-            # The top of the bottom pipe should be at gap_center_y + half_gap
+            # Create more precise collision rect for top pipe
+            pipe_width = self.pipe_top_img.get_width()
+            inset_x = int(pipe_width * 0.05)
+            top_pipe_rect = pygame.Rect(
+                pipe[0] + inset_x, 
+                top_pipe_y, 
+                pipe_width - (inset_x * 2), 
+                self.pipe_top_img.get_height()
+            )
+            
+            # Bottom pipe position
             bottom_pipe_y = gap_center_y + half_gap
-            game_surface.blit(pipe_bottom_img, (pipe[0], bottom_pipe_y))
-        
-        # Collision detection for pipes
-        bird_rect = rotated_bird.get_rect(topleft=rotated_rect.topleft)
-        collision = collision_detection(bird_rect, pipes, pipe_top_img, pipe_bottom_img, pipe_gap, passed_pipes)
-        
-        # Handle collision with pipes
-        if collision and game_state != GAME_OVER:
-            hit_sound.play()
-            die_sound.play()  # Play die sound once when entering game over state
-            game_state = GAME_OVER
-            die_sound_played = True  # Mark that we've played the die sound
+            bottom_pipe_rect = pygame.Rect(
+                pipe[0] + inset_x, 
+                bottom_pipe_y, 
+                pipe_width - (inset_x * 2), 
+                self.pipe_bottom_img.get_height()
+            )
             
-            # Initialize flash effect
-            flash_alpha = 180  # Start with high alpha (semi-transparent white)
-            flash_start_time = current_time
-
-        # Check for collision with the land
-        if bird_y + bird_midflap_img.get_height() > land_y:
-            if game_state != GAME_OVER:
-                hit_sound.play()
-                die_sound.play()  # Play die sound when hitting the ground
-                game_state = GAME_OVER
-                die_sound_played = True
-            bird_y = land_y - bird_midflap_img.get_height()
-            bird_velocity = 0  # Stop the bird from falling further
-
-        # Prevent the bird from going off the top of the screen
-        if bird_y < 0:
-            bird_y = 0
-            bird_velocity = 0
-
-        # Scroll the land
-        land_scroll -= land_scroll_speed
-        if land_scroll <= -screen_width:
-            land_scroll = 0
-            
-        # Draw two copies of the land for infinite scrolling
-        land_y = game_area_height - land_img.get_height()
-        game_surface.blit(land_img, (land_scroll, land_y))
-        game_surface.blit(land_img, (land_scroll + screen_width, land_y))
+            # Check for collision
+            if bird_rect.colliderect(top_pipe_rect) or bird_rect.colliderect(bottom_pipe_rect):
+                return True
+                
+        return False
         
-        # Draw the rotated bird
-        game_surface.blit(rotated_bird, rotated_rect.topleft)
-        
-        # Draw the score
-        draw_score(game_surface, number_images, score, screen_width)
-    elif game_state == GAME_OVER:
-        # Apply increased gravity when game over
-        bird_velocity += gravitational_force * 1.5
-        bird_y += int(bird_velocity)
-        
-        # Bird always rotates downward in game over state
-        bird_angle = max(max_downward_angle, bird_angle - downward_rotation_speed * 2)
-        
-        # Rotate the bird image (use upflap in game over state as bird is falling)
-        rotated_bird = pygame.transform.rotate(bird_upflap_img, bird_angle)
-        rotated_rect = rotated_bird.get_rect(center=(bird_x + bird_midflap_img.get_width()//2, 
-                                                    bird_y + bird_midflap_img.get_height()//2))
-        
-        # Check for collision with the land (final resting place)
-        land_y = game_area_height - land_img.get_height()
-        
-        # Fix the bird landing to be exactly on top of the land
-        # Check for collision with the land
-        if bird_y + bird_midflap_img.get_height() > land_y:
-            bird_y = land_y - bird_midflap_img.get_height()
-            bird_velocity = 0  # Stop the bird from falling further
-        
-        # Draw pipes (they stop moving in game over state)
-        for pipe in pipes:
+    def draw(self, surface):
+        """Draw all active pipes."""
+        for pipe in self.pipes:
+            # Calculate gap position
             gap_center_y = pipe[1]
-            half_gap = pipe_gap // 2
+            half_gap = self.pipe_gap // 2
             
-            top_pipe_y = gap_center_y - half_gap - pipe_top_img.get_height()
-            game_surface.blit(pipe_top_img, (pipe[0], top_pipe_y))
+            # Top pipe
+            top_pipe_y = gap_center_y - half_gap - self.pipe_top_img.get_height()
+            surface.blit(self.pipe_top_img, (pipe[0], top_pipe_y))
             
+            # Bottom pipe
             bottom_pipe_y = gap_center_y + half_gap
-            game_surface.blit(pipe_bottom_img, (pipe[0], bottom_pipe_y))
-        
-        # Draw the rotated bird
-        game_surface.blit(rotated_bird, rotated_rect.topleft)
-        
-        # Land no longer scrolls in game over state
-        land_y = game_area_height - land_img.get_height()
-        game_surface.blit(land_img, (land_scroll, land_y))
-        game_surface.blit(land_img, (land_scroll + screen_width, land_y))
-        
-        # Show game over image
-        gameover_x = (screen_width - gameover_img.get_width()) // 2
-        gameover_y = (game_area_height - gameover_img.get_height()) // 2
-        game_surface.blit(gameover_img, (gameover_x, gameover_y))
-        
-        # Draw the score (continue to show score in game over state)
-        draw_score(game_surface, number_images, score, screen_width)
-        
-        # Transition to restart state after a delay
-        if gameover_time == 0:
-            gameover_time = pygame.time.get_ticks()
-        elif pygame.time.get_ticks() - gameover_time > 2000:  # 2 seconds delay
-            game_state = GAME_RESTART
-    elif game_state == GAME_RESTART:
-        # Toggle between day and night themes when restarting
-        is_night_theme = not is_night_theme
-        
-        # Update physics based on new theme
-        gravitational_force = night_gravitational_force if is_night_theme else day_gravitational_force
-        
-        # Reload game assets with new theme
-        background_img, tap_to_start_img, land_img, land_scroll_speed = background_setting(
-            screen, screen_width, game_area_height, 
-            scroll_speed=night_scroll_speed if is_night_theme else day_scroll_speed,
-            night_mode=is_night_theme)
-        
-        bird_imgs, bird_x_orig, bird_y_orig = bird_mechanics(
-            screen_width, game_area_height, night_mode=is_night_theme)
-        bird_downflap_img, bird_midflap_img, bird_upflap_img = bird_imgs
-        pipe_top_img, pipe_bottom_img, pipes, pipe_gap = obstacle_generation(
-            screen_width, game_area_height, land_height, night_mode=is_night_theme)
-        
-        # Update flapping animation frames with new bird images
-        flap_animation_frames = [bird_downflap_img, bird_midflap_img, bird_upflap_img, bird_midflap_img]
-        
-        # Reset game variables for restart
-        bird_x = bird_x_orig
-        bird_y = bird_y_orig
-        bird_velocity = 0
-        bird_angle = 0
-        pipes = []
-        passed_pipes.clear()
-        score = 0
-        game_state = GAME_START
-        gameover_time = 0
-        current_bird_img = bird_midflap_img
+            surface.blit(self.pipe_bottom_img, (pipe[0], bottom_pipe_y))
 
-    # Apply flash effect if active
-    if flash_alpha > 0:
-        # Calculate how much time has passed since the flash started
-        flash_elapsed = current_time - flash_start_time
-        
-        # Decrease alpha based on elapsed time
-        if flash_elapsed < flash_duration:
-            # Flash is still active
-            flash_surface.fill((255, 255, 255, flash_alpha))
-            game_surface.blit(flash_surface, (0, 0))
-        else:
-            # Flash effect is over
-            flash_alpha = 0
 
-    # Fill the screen with black first
-    screen.fill((0, 0, 0))
+class ScoreDisplay:
+    """Manages score display and related UI elements."""
     
-    # Draw the game surface onto the main screen at the offset position
-    screen.blit(game_surface, (0, game_area_y_offset))
+    def __init__(self, assets, screen_width, screen_height):
+        """Initialize score display."""
+        self.assets = assets
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        
+        # Load number images
+        self.number_images = {}
+        self.load_number_images()
+        
+        # Game over image
+        self.load_gameover_image()
+        
+    def load_number_images(self):
+        """Load images for digits 0-9."""
+        for i in range(10):
+            self.number_images[i] = self.assets.load_image(f'{i}.png')
+            
+            # If no image was found, create a text rendering as fallback
+            if self.number_images[i].get_width() <= 2:
+                font = pygame.font.SysFont(None, 40)
+                self.number_images[i] = font.render(str(i), True, (255, 255, 255))
+        
+        # Scale all number images
+        digit_height = int(self.screen_height * 0.08)
+        for i in range(10):
+            original_ratio = self.number_images[i].get_width() / self.number_images[i].get_height()
+            digit_width = int(digit_height * original_ratio)
+            self.number_images[i] = pygame.transform.scale(self.number_images[i], (digit_width, digit_height))
+    
+    def load_gameover_image(self):
+        """Load and scale game over image."""
+        self.gameover_img = self.assets.load_image('gameover.png')
+        
+        # Scale the game over image
+        gameover_width = int(self.screen_width * 0.5)  # 50% of screen width
+        gameover_height = int(gameover_width * self.gameover_img.get_height() / self.gameover_img.get_width())
+        self.gameover_img = pygame.transform.scale(self.gameover_img, (gameover_width, gameover_height))
+    
+    def draw_score(self, surface, score):
+        """Draw the current score on screen."""
+        # Convert score to string to get individual digits
+        score_str = str(score)
+        
+        # Calculate total width of all digits to center
+        total_width = sum(self.number_images[int(digit)].get_width() for digit in score_str)
+        
+        # Position the score in the upper part of the screen
+        x_pos = (self.screen_width - total_width) // 2
+        y_pos = int(self.screen_height * 0.03)
+        
+        # Draw each digit
+        for digit in score_str:
+            digit_img = self.number_images[int(digit)]
+            surface.blit(digit_img, (x_pos, y_pos))
+            x_pos += digit_img.get_width()
+            
+    def draw_gameover(self, surface):
+        """Draw the game over image."""
+        x = (self.screen_width - self.gameover_img.get_width()) // 2
+        y = (self.screen_height - self.gameover_img.get_height()) // 2
+        surface.blit(self.gameover_img, (x, y))
 
-    # Update the display
-    pygame.display.flip()
 
-    # Cap the frame rate
-    clock.tick(60)
+class GameStateManager:
+    """Manages game states and transitions."""
+    
+    # Game state constants
+    START = 0
+    PLAYING = 1
+    GAME_OVER = 2
+    RESTART = 3
+    
+    def __init__(self):
+        """Initialize game state manager."""
+        self.state = self.START
+        self.gameover_time = 0
+        
+    def handle_event(self, event, bird, sounds):
+        """Handle input events based on current game state."""
+        if event.type == pygame.QUIT:
+            return False
+            
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                return False
+                
+            elif event.key == pygame.K_SPACE:
+                if self.state == self.START:
+                    self.state = self.PLAYING
+                    bird.jump()
+                    sounds['wing'].play()
+                elif self.state == self.PLAYING:
+                    bird.jump()
+                    sounds['wing'].play()
+                    
+        elif event.type == pygame.FINGERDOWN:
+            if self.state == self.START:
+                self.state = self.PLAYING
+                bird.jump()
+                sounds['wing'].play()
+            elif self.state == self.PLAYING:
+                bird.jump()
+                sounds['wing'].play()
+                
+        return True
+        
+    def update(self, current_time):
+        """Update game state logic."""
+        if self.state == self.GAME_OVER:
+            if self.gameover_time == 0:
+                self.gameover_time = current_time
+            elif current_time - self.gameover_time > 2000:  # 2 second delay
+                self.state = self.RESTART
+                
+    def set_gameover(self):
+        """Set the game to game over state."""
+        self.state = self.GAME_OVER
+        self.gameover_time = 0
+        
+    def reset(self):
+        """Reset the game state."""
+        self.state = self.START
+        self.gameover_time = 0
 
-# Quit pygame
-pygame.quit()
+
+class FlashEffect:
+    """Manages visual flash effects."""
+    
+    def __init__(self, screen_width, screen_height):
+        """Initialize flash effect."""
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        self.surface = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
+        self.alpha = 0
+        self.duration = 100  # Flash duration in milliseconds
+        self.start_time = 0
+        
+    def start_flash(self, current_time):
+        """Start the flash effect."""
+        self.alpha = 180  # Semi-transparent white
+        self.start_time = current_time
+        
+    def update(self, current_time):
+        """Update flash alpha based on elapsed time."""
+        if self.alpha > 0:
+            flash_elapsed = current_time - self.start_time
+            if flash_elapsed < self.duration:
+                # Flash is still active
+                pass
+            else:
+                # Flash effect is over
+                self.alpha = 0
+                
+    def draw(self, surface):
+        """Draw the flash effect if active."""
+        if self.alpha > 0:
+            self.surface.fill((255, 255, 255, self.alpha))
+            surface.blit(self.surface, (0, 0))
+
+
+class FlappyGame:
+    """Main game class that coordinates all components."""
+    
+    def __init__(self):
+        """Initialize the game."""
+        # Initialize pygame
+        pygame.init()
+        pygame.mixer.init()
+        
+        # Set up environment variables for Android
+        os.environ['SDL_ANDROID_HIDE_KEYBOARD'] = '1'
+        os.environ['SDL_ANDROID_IMMERSIVE_MODE'] = '1'
+        
+        # Get screen dimensions
+        info = pygame.display.Info()
+        self.screen_width = info.current_w
+        self.screen_height = info.current_h
+        
+        # Adjust screen width if too wide
+        if self.screen_width / self.screen_height > 1.2:
+            self.screen_width = 412
+            
+        # Set up display
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), 
+                                             pygame.FULLSCREEN | pygame.SCALED)
+        pygame.display.set_caption('Flappy Bird')
+        pygame.key.set_repeat(0)  # Disable key repeat
+        
+        # Game area dimensions
+        self.game_area_height = int(self.screen_height * 0.78)
+        self.game_area_y_offset = int(self.screen_height * 0.11)
+        self.game_surface = pygame.Surface((self.screen_width, self.game_area_height))
+        
+        # Initialize core components
+        self.assets = GameAssetManager()
+        self.config = GameConfig(is_night_theme=True)
+        self.load_sounds()
+        
+        # Initialize game objects
+        self.background = BackgroundManager(self.assets, self.config, self.screen_width, self.game_area_height)
+        self.bird = Bird(self.assets, self.config, self.screen_width, self.game_area_height)
+        self.pipes = PipeManager(self.assets, self.config, self.screen_width, self.game_area_height)
+        self.score_display = ScoreDisplay(self.assets, self.screen_width, self.game_area_height)
+        self.flash = FlashEffect(self.screen_width, self.game_area_height)
+        
+        # Game state and scoring
+        self.state_manager = GameStateManager()
+        self.score = 0
+        self.die_sound_played = False
+        
+        # Clock for controlling framerate
+        self.clock = pygame.time.Clock()
+        
+    def load_sounds(self):
+        """Load all game sounds."""
+        self.sounds = {
+            'point': self.assets.load_sound('point.ogg', 0.7, 'point.wav'),
+            'hit': self.assets.load_sound('hit.wav', 1.0, 'hit.ogg'),
+            'die': self.assets.load_sound('die.wav', 1.0),
+            'wing': self.assets.load_sound('wing.ogg', 0.7, 'wing.wav')
+        }
+        
+    def reset_game(self):
+        """Reset the game after game over."""
+        # Toggle theme
+        self.config.toggle_theme()
+        
+        # Reload assets for new theme
+        self.background.load_assets()
+        self.bird.load_images()
+        self.pipes.load_images()
+        
+        # Reset objects
+        self.bird.reset_position()
+        self.pipes.pipes = []
+        
+        # Reset state and score
+        self.state_manager.reset()
+        self.score = 0
+        self.die_sound_played = False
+        
+    def handle_events(self):
+        """Process all game events."""
+        for event in pygame.event.get():
+            if not self.state_manager.handle_event(event, self.bird, self.sounds):
+                return False
+        return True
+        
+    def update(self):
+        """Update game state."""
+        current_time = pygame.time.get_ticks()
+        
+        # Update state manager
+        self.state_manager.update(current_time)
+        
+        # Handle state transitions
+        if self.state_manager.state == GameStateManager.RESTART:
+            self.reset_game()
+            
+        # Update game objects
+        self.background.update(1, self.state_manager.state)
+        self.bird.update_animation(current_time)
+        self.bird.update(1, self.state_manager.state)
+        
+        # Update flash effect
+        self.flash.update(current_time)
+        
+        # Game logic when playing
+        if self.state_manager.state == GameStateManager.PLAYING:
+            # Update pipes and check for score increase
+            score_increase = self.pipes.update(1, self.state_manager.state)
+            if score_increase > 0:
+                self.score += score_increase
+                self.sounds['point'].play()
+            
+            # Get bird collision rect
+            bird_collision_rect, _ = self.bird.get_rect()
+            
+            # Check collision with pipes
+            pipe_collision = self.pipes.check_collision(bird_collision_rect)
+            
+            # Check collision with ground or ceiling
+            land_y = self.game_area_height - self.background.land_height
+            ground_collision = self.bird.y + self.bird.midflap_img.get_height() > land_y
+            ceiling_collision = self.bird.y < 0
+            
+            # Handle collisions
+            if pipe_collision and self.state_manager.state != GameStateManager.GAME_OVER:
+                self.sounds['hit'].play()
+                self.sounds['die'].play()
+                self.state_manager.set_gameover()
+                self.die_sound_played = True
+                self.flash.start_flash(current_time)
+                
+            if ground_collision:
+                if self.state_manager.state != GameStateManager.GAME_OVER:
+                    self.sounds['hit'].play()
+                    self.sounds['die'].play()
+                    self.state_manager.set_gameover()
+                    self.die_sound_played = True
+                self.bird.y = land_y - self.bird.midflap_img.get_height()
+                self.bird.velocity = 0
+                
+            if ceiling_collision:
+                self.bird.y = 0
+                self.bird.velocity = 0
+                
+    def draw(self):
+        """Draw the game."""
+        # Fill game surface with black
+        self.game_surface.fill((0, 0, 0))
+        
+        # Draw background
+        self.background.draw(self.game_surface)
+        
+        # Draw objects based on game state
+        if self.state_manager.state == GameStateManager.START:
+            # Draw bird and tap to start
+            self.bird.draw(self.game_surface)
+            self.background.draw_tap_to_start(self.game_surface)
+            self.score_display.draw_score(self.game_surface, 0)
+            
+        else:
+            # Draw pipes
+            self.pipes.draw(self.game_surface)
+            
+            # Draw bird
+            self.bird.draw(self.game_surface)
+            
+            # Draw score
+            self.score_display.draw_score(self.game_surface, self.score)
+            
+            # Draw game over in GAME_OVER state
+            if self.state_manager.state == GameStateManager.GAME_OVER:
+                self.score_display.draw_gameover(self.game_surface)
+                
+        # Draw flash effect
+        self.flash.draw(self.game_surface)
+        
+        # Fill the screen with black first
+        self.screen.fill((0, 0, 0))
+        
+        # Draw the game surface onto the main screen
+        self.screen.blit(self.game_surface, (0, self.game_area_y_offset))
+        
+        # Update display
+        pygame.display.flip()
+        
+    def run(self):
+        """Main game loop."""
+        running = True
+        while running:
+            # Handle events
+            running = self.handle_events()
+            
+            # Update game state
+            self.update()
+            
+            # Draw the game
+            self.draw()
+            
+            # Cap the frame rate
+            self.clock.tick(60)
+            
+        # Clean up
+        pygame.quit()
+
+
+# Create and run the game
+if __name__ == "__main__":
+    game = FlappyGame()
+    game.run()
