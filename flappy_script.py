@@ -12,7 +12,7 @@ import random
 # 4 = Overall Game
 # 5 = Exit
 # -----------------------------------------------
-SELECTED_DEMO = 2  # Default: Full game
+SELECTED_DEMO = 3  # Default: Full game
 
 # -----------------------------------------------
 # DEMO PARAMETERS - CUSTOMIZE THESE AS NEEDED
@@ -23,6 +23,9 @@ BIRD_JUMP = -40.0
 
 # Pipes Demo parameters
 PIPE_COUNT = 3
+PIPE_GAP_MULTIPLIER = 1.5  # Multiplier for vertical gap between pipes (higher = wider gap)
+PIPE_SPACING_MULTIPLIER = 1.8  # Multiplier for horizontal spacing between pipes (higher = more space)
+SCROLL_SPEED_MULTIPLIER = 0.3  # Multiplier for scroll speed (lower = slower)
 
 
 class GameAssetManager:
@@ -89,7 +92,8 @@ class GameConfig:
         # Physics constants (same for both themes)
         self.gravitational_force = 5
         self.jump_velocity = -40
-        self.scroll_speed = 13
+        self.original_scroll_speed = 13  # Store original speed
+        self.scroll_speed = 13 * SCROLL_SPEED_MULTIPLIER  # Apply speed multiplier
         
         # Bird sizing
         self.base_bird_size_percentage = 0.1
@@ -333,7 +337,8 @@ class PipeManager:
         
         # Pipe variables
         self.pipes = []
-        self.pipe_gap = int(screen_height * 0.17)  # Gap between pipes
+        # Wider gap between pipes
+        self.pipe_gap = int(screen_height * 0.17 * PIPE_GAP_MULTIPLIER)  # Apply gap multiplier 
         self.pipe_frequency = 3000  # New pipe every 3 seconds
         self.last_pipe = pygame.time.get_ticks() - self.pipe_frequency  # Time since last pipe
         
@@ -1000,13 +1005,21 @@ class FlappyGameDemo(FlappyGame):
                     if event.key == pygame.K_ESCAPE:
                         running = False
                     elif event.key == pygame.K_SPACE and waiting_for_input:
-                        # Add a new land segment when input is given
-                        land_positions.append(land_positions[-1] + self.screen_width)
+                        # Fix: Check if list is empty before adding
+                        if land_positions:
+                            land_positions.append(land_positions[-1] + self.screen_width)
+                        else:
+                            # If list is empty, start from screen width
+                            land_positions.append(self.screen_width)
                         waiting_for_input = False
                         print("New land segment generated")
                 elif event.type == pygame.FINGERDOWN and waiting_for_input:
-                    # Add a new land segment when input is given
-                    land_positions.append(land_positions[-1] + self.screen_width)
+                    # Fix: Check if list is empty before adding
+                    if land_positions:
+                        land_positions.append(land_positions[-1] + self.screen_width)
+                    else:
+                        # If list is empty, start from screen width
+                        land_positions.append(self.screen_width)
                     waiting_for_input = False
                     print("New land segment generated")
             
@@ -1015,7 +1028,8 @@ class FlappyGameDemo(FlappyGame):
                 land_positions[i] -= self.config.scroll_speed
             
             # Check if we need more land segments
-            if not waiting_for_input and max(land_positions) < self.screen_width:
+            # Fix: Check if list is empty before checking max value
+            if not waiting_for_input and (not land_positions or max(land_positions) < self.screen_width):
                 waiting_for_input = True
                 print("Land segments running out. Tap/Space to generate more.")
             
@@ -1040,7 +1054,7 @@ class FlappyGameDemo(FlappyGame):
                 status_text = "Tap/Space to generate new land segment"
                 status_color = (255, 255, 0)  # Yellow for emphasis
             else:
-                status_text = f"Land segments: {len(land_positions)}"
+                status_text = f"Land segments: {len(land_positions)}  Speed: {self.config.scroll_speed:.1f}"
                 status_color = (255, 255, 255)  # White for normal status
                 
             status_surface = font.render(status_text, True, status_color)
@@ -1070,6 +1084,8 @@ class FlappyGameDemo(FlappyGame):
         
         print(f"\nPipes Demo")
         print(f"Using {pipe_count} pipes")
+        print(f"Vertical pipe gap: {self.pipes.pipe_gap} pixels")
+        print(f"Scroll speed: {self.config.scroll_speed:.1f} pixels/frame")
         print("Controls:")
         print("- Space/Screen tap: Generate new pipe set when current pipes exit")
         print("- ESC: Exit")
@@ -1078,12 +1094,14 @@ class FlappyGameDemo(FlappyGame):
         # Reset state
         self.pipes.pipes = []
         
-        # Generate initial pipes
-        pipe_spacing = self.screen_width / (pipe_count + 1)
+        # Generate initial pipes with increased horizontal spacing
+        base_pipe_spacing = self.screen_width / (pipe_count + 1)
+        pipe_spacing = base_pipe_spacing * PIPE_SPACING_MULTIPLIER
+        
         for i in range(pipe_count):
-            # Place pipes evenly across the screen
+            # Place pipes evenly across the screen with the new spacing
             pipe = self.pipes.generate_pipe()
-            pipe[0] = (i + 1) * pipe_spacing
+            pipe[0] = self.screen_width + (i * pipe_spacing)
             self.pipes.pipes.append(pipe)
         
         # Run the demo loop
@@ -1103,7 +1121,7 @@ class FlappyGameDemo(FlappyGame):
                         self.pipes.pipes = []
                         for i in range(pipe_count):
                             pipe = self.pipes.generate_pipe()
-                            pipe[0] = (i + 1) * pipe_spacing
+                            pipe[0] = self.screen_width + (i * pipe_spacing)
                             self.pipes.pipes.append(pipe)
                         waiting_for_tap = False
                         print("New pipe set generated")
@@ -1112,7 +1130,7 @@ class FlappyGameDemo(FlappyGame):
                     self.pipes.pipes = []
                     for i in range(pipe_count):
                         pipe = self.pipes.generate_pipe()
-                        pipe[0] = (i + 1) * pipe_spacing
+                        pipe[0] = self.screen_width + (i * pipe_spacing)
                         self.pipes.pipes.append(pipe)
                     waiting_for_tap = False
                     print("New pipe set generated")
@@ -1135,14 +1153,19 @@ class FlappyGameDemo(FlappyGame):
             # Draw background for context
             self.background.draw(self.game_surface)
             
-            # Draw land for reference
-            self.background.draw_land(self.game_surface)
-            
-            # Draw pipes
+            # Draw pipes BEFORE land to make them appear behind it
             self.pipes.draw(self.game_surface)
             
-            # Draw instructions and status
+            # Draw land for reference (now drawn AFTER pipes)
+            self.background.draw_land(self.game_surface)
+            
+            # Draw horizontal spacing information
             font = pygame.font.SysFont(None, 24)
+            spacing_text = f"Pipe horizontal spacing: {pipe_spacing:.1f} pixels"
+            spacing_surface = font.render(spacing_text, True, (255, 255, 255))
+            self.game_surface.blit(spacing_surface, (10, 40))
+            
+            # Draw instructions and status
             if waiting_for_tap:
                 status_text = "Tap/Space to generate new pipes"
                 status_color = (255, 255, 0)  # Yellow for emphasis
