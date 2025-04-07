@@ -15,13 +15,13 @@ import random
 SELECTED_DEMO = 3  # Default: Full game
 
 # -----------------------------------------------
-# DEMO PARAMETERS - CUSTOMIZE THESE AS NEEDED
+# GAME PARAMETERS - THESE AFFECT BOTH DEMOS AND FULL GAME
 # -----------------------------------------------
-# Bird Mechanics Demo parameters
+# Bird Mechanics parameters
 BIRD_GRAVITY = 5.0
 BIRD_JUMP = -40.0
 
-# Pipes Demo parameters
+# Pipes parameters
 PIPE_COUNT = 3
 PIPE_GAP_MULTIPLIER = 1.5  # Multiplier for vertical gap between pipes (higher = wider gap)
 PIPE_SPACING_MULTIPLIER = 1.8  # Multiplier for horizontal spacing between pipes (higher = more space)
@@ -90,8 +90,8 @@ class GameConfig:
         self.is_night_theme = is_night_theme
         
         # Physics constants (same for both themes)
-        self.gravitational_force = 5
-        self.jump_velocity = -40
+        self.gravitational_force = BIRD_GRAVITY  # Use global parameter
+        self.jump_velocity = BIRD_JUMP  # Use global parameter
         self.original_scroll_speed = 13  # Store original speed
         self.scroll_speed = 13 * SCROLL_SPEED_MULTIPLIER  # Apply speed multiplier
         
@@ -339,7 +339,7 @@ class PipeManager:
         self.pipes = []
         # Wider gap between pipes
         self.pipe_gap = int(screen_height * 0.17 * PIPE_GAP_MULTIPLIER)  # Apply gap multiplier 
-        self.pipe_frequency = 3000  # New pipe every 3 seconds
+        self.pipe_frequency = 3000 / PIPE_SPACING_MULTIPLIER  # Adjust pipe frequency based on spacing
         self.last_pipe = pygame.time.get_ticks() - self.pipe_frequency  # Time since last pipe
         
         # Load pipe images
@@ -389,7 +389,9 @@ class PipeManager:
         # Generate new pipes on a timer
         time_now = pygame.time.get_ticks()
         if time_now - self.last_pipe > self.pipe_frequency:
-            self.pipes.append(self.generate_pipe())
+            pipe = self.generate_pipe()
+            # Apply horizontal spacing for full game
+            self.pipes.append(pipe)
             self.last_pipe = time_now
             
         # Update pipe positions and handle removal
@@ -806,7 +808,7 @@ class FlappyGame:
             self.score_display.draw_score(self.game_surface, 0)
             
         else:
-            # Draw pipes
+            # Draw pipes BEFORE land to make them appear behind it
             self.pipes.draw(self.game_surface)
             
             # Draw bird
@@ -842,6 +844,15 @@ class FlappyGame:
         
     def run(self):
         """Main game loop."""
+        # Show settings being used for main game
+        print(f"\nStarting Full Game...")
+        print(f"Using settings:")
+        print(f"- Bird gravity: {BIRD_GRAVITY}")
+        print(f"- Bird jump: {BIRD_JUMP}")
+        print(f"- Pipe gap multiplier: {PIPE_GAP_MULTIPLIER}")
+        print(f"- Pipe spacing multiplier: {PIPE_SPACING_MULTIPLIER}")
+        print(f"- Scroll speed multiplier: {SCROLL_SPEED_MULTIPLIER}")
+        
         running = True
         while running:
             # Time the frame
