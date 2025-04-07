@@ -881,6 +881,10 @@ class MenuSystem:
                     print("Invalid choice. Please enter a number between 1 and 5.")
             except ValueError:
                 print("Invalid input. Please enter a number.")
+            except EOFError:
+                print("EOFError: No input received. Exiting...")
+                pygame.quit()
+                sys.exit()
 
 
 class FlappyGameDemo(FlappyGame):
