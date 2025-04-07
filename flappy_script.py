@@ -65,17 +65,10 @@ class GameConfig:
         # Theme settings
         self.is_night_theme = is_night_theme
         
-        # Physics constants
-        self.day_gravitational_force = 5
-        self.night_gravitational_force = 5
-        
-        # Jump strength
-        self.day_jump_velocity = -40
-        self.night_jump_velocity = -40
-        
-        # Scroll speeds
-        self.day_scroll_speed = 13
-        self.night_scroll_speed = 13
+        # Physics constants (same for both themes)
+        self.gravitational_force = 5
+        self.jump_velocity = -40
+        self.scroll_speed = 13
         
         # Bird sizing
         self.base_bird_size_percentage = 0.1
@@ -86,19 +79,15 @@ class GameConfig:
         self.rotation_speed = 3
         self.downward_rotation_speed = 10
         
-        # Update current settings based on theme
-        self.update_theme_settings()
-        
     def update_theme_settings(self):
         """Update game settings based on current theme."""
-        self.gravitational_force = self.night_gravitational_force if self.is_night_theme else self.day_gravitational_force
-        self.jump_velocity = self.night_jump_velocity if self.is_night_theme else self.day_jump_velocity
-        self.scroll_speed = self.night_scroll_speed if self.is_night_theme else self.day_scroll_speed
+        # No physics settings to update since they're the same for both themes
+        pass
         
     def toggle_theme(self):
         """Toggle between day and night themes."""
         self.is_night_theme = not self.is_night_theme
-        self.update_theme_settings()
+        # No need to call update_theme_settings since physics don't change
 
 
 class BackgroundManager:
