@@ -89,7 +89,25 @@ screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREE
 pygame.display.set_caption('Flappy Bird')
 
 # Variable to track which theme we're using (day/night)
-is_night_theme = False
+is_night_theme = True  # Default to night theme
+
+# Game speed and physics constants
+day_gravitational_force = 5
+night_gravitational_force = 7  # Higher gravity in night mode
+
+# Use current theme's gravity
+gravitational_force = night_gravitational_force if is_night_theme else day_gravitational_force
+
+# Jump strength
+day_jump_velocity = -40
+night_jump_velocity = -45  # Stronger jump in night mode
+
+# Land and pipe speed
+day_scroll_speed = 13
+night_scroll_speed = 16  # Faster scrolling in night mode
+
+# Bird sizing - base percentage of screen width for dynamic scaling
+BASE_BIRD_SIZE_PERCENTAGE = 0.1  # Bird width as percentage of screen width
 
 # Disable Android keyboard
 pygame.key.set_repeat(0)  # Disable key repeat which can trigger keyboard
@@ -100,7 +118,6 @@ game_area_y_offset = int(screen_height * 0.11)  # 11% from top to center the gam
 game_area_rect = pygame.Rect(0, game_area_y_offset, screen_width, game_area_height)
 
 # Declare a global gravity variable
-gravitational_force = 5
 bird_velocity = 0  # Initial vertical velocity of the bird
 bird_angle = 0  # Current rotation angle of the bird
 max_upward_angle = 45  # Maximum rotation when jumping (positive for clockwise)
@@ -229,16 +246,20 @@ def bird_mechanics(screen_width, screen_height, night_mode=False):
                 pygame.quit()
                 sys.exit()
 
-    # Scale all bird images to quadruple their size
+    # Calculate bird size dynamically based on screen width
+    target_bird_width = int(screen_width * BASE_BIRD_SIZE_PERCENTAGE)
+    scale_factor = target_bird_width / bird_downflap_img.get_width()
+    
+    # Scale all bird images based on the dynamic scale factor
     bird_downflap_img = pygame.transform.scale(bird_downflap_img, 
-                                              (bird_downflap_img.get_width() * 4, 
-                                               bird_downflap_img.get_height() * 4))
+                                              (target_bird_width, 
+                                               int(bird_downflap_img.get_height() * scale_factor)))
     bird_midflap_img = pygame.transform.scale(bird_midflap_img, 
-                                             (bird_midflap_img.get_width() * 4, 
-                                              bird_midflap_img.get_height() * 4))
+                                             (target_bird_width, 
+                                              int(bird_midflap_img.get_height() * scale_factor)))
     bird_upflap_img = pygame.transform.scale(bird_upflap_img, 
-                                            (bird_upflap_img.get_width() * 4, 
-                                             bird_upflap_img.get_height() * 4))
+                                            (target_bird_width, 
+                                             int(bird_upflap_img.get_height() * scale_factor)))
 
     # Bird position variables - x is centered, y is higher from center
     bird_x = screen_width // 2 - bird_downflap_img.get_width() // 2
@@ -515,14 +536,16 @@ while running:
                 if game_state == GAME_START:
                     # Change to playing state when spacebar is pressed
                     game_state = GAME_PLAYING
-                    bird_velocity = -40  # Initial jump when starting
+                    jump_velocity = night_jump_velocity if is_night_theme else day_jump_velocity
+                    bird_velocity = jump_velocity  # Initial jump when starting
                     bird_angle = max_upward_angle
                     wing_sound.play()  # Play wing sound on touch
                     current_bird_img = bird_downflap_img  # Show downflap on touch
                     last_bird_action = 1  # Track that we just jumped
                 elif game_state == GAME_PLAYING:
                     # Make the bird jump when spacebar is pressed
-                    bird_velocity = -40
+                    jump_velocity = night_jump_velocity if is_night_theme else day_jump_velocity
+                    bird_velocity = jump_velocity
                     bird_angle = max_upward_angle
                     wing_sound.play()  # Play wing sound on touch
                     current_bird_img = bird_downflap_img  # Show downflap on touch
@@ -531,14 +554,16 @@ while running:
             if game_state == GAME_START:
                 # Change to playing state when screen is touched
                 game_state = GAME_PLAYING
-                bird_velocity = -40  # Initial jump when starting
+                jump_velocity = night_jump_velocity if is_night_theme else day_jump_velocity
+                bird_velocity = jump_velocity  # Initial jump when starting
                 bird_angle = max_upward_angle
                 wing_sound.play()  # Play wing sound on touch
                 current_bird_img = bird_downflap_img  # Show downflap on touch
                 last_bird_action = 1  # Track that we just jumped
             elif game_state == GAME_PLAYING:
                 # Make the bird jump when the screen is touched
-                bird_velocity = -40
+                jump_velocity = night_jump_velocity if is_night_theme else day_jump_velocity
+                bird_velocity = jump_velocity
                 bird_angle = max_upward_angle
                 wing_sound.play()  # Play wing sound on touch
                 current_bird_img = bird_downflap_img  # Show downflap on touch
@@ -754,9 +779,15 @@ while running:
         # Toggle between day and night themes when restarting
         is_night_theme = not is_night_theme
         
+        # Update physics based on new theme
+        gravitational_force = night_gravitational_force if is_night_theme else day_gravitational_force
+        
         # Reload game assets with new theme
         background_img, tap_to_start_img, land_img, land_scroll_speed = background_setting(
-            screen, screen_width, game_area_height, night_mode=is_night_theme)
+            screen, screen_width, game_area_height, 
+            scroll_speed=night_scroll_speed if is_night_theme else day_scroll_speed,
+            night_mode=is_night_theme)
+        
         bird_imgs, bird_x_orig, bird_y_orig = bird_mechanics(
             screen_width, game_area_height, night_mode=is_night_theme)
         bird_downflap_img, bird_midflap_img, bird_upflap_img = bird_imgs
