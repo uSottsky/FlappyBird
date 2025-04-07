@@ -847,7 +847,357 @@ class FlappyGame:
         pygame.quit()
 
 
-# Create and run the game
+class MenuSystem:
+    """Handles the command-line menu interface for the game."""
+    
+    def __init__(self):
+        """Initialize the menu system."""
+        self.options = [
+            "1. Bird Mechanics Demo",
+            "2. Background Manager Demo",
+            "3. Pipes Demo",
+            "4. Overall Game",
+            "5. Exit"
+        ]
+        self.choice = None
+        
+    def display_menu(self):
+        """Display the menu options."""
+        print("\n===== FLAPPY BIRD DEMONSTRATION MENU =====")
+        for option in self.options:
+            print(option)
+        print("=========================================")
+        
+    def get_choice(self):
+        """Get user menu selection."""
+        while True:
+            self.display_menu()
+            try:
+                choice = int(input("Enter your choice (1-5): "))
+                if 1 <= choice <= 5:
+                    self.choice = choice
+                    return choice
+                else:
+                    print("Invalid choice. Please enter a number between 1 and 5.")
+            except ValueError:
+                print("Invalid input. Please enter a number.")
+
+
+class FlappyGameDemo(FlappyGame):
+    """Extended FlappyGame class with demo capabilities."""
+    
+    def run_bird_mechanics_demo(self):
+        """Run a demo showing only bird mechanics."""
+        # Get gravity and jump values from user
+        try:
+            print("\nBird Mechanics Demo")
+            gravity = float(input("Enter gravity value (default 5): ") or "5")
+            jump = float(input("Enter jump velocity (default -40, negative is up): ") or "-40")
+            
+            # Apply custom values
+            self.config.gravitational_force = gravity
+            self.config.jump_velocity = jump
+            
+            print("\nDemo controls:")
+            print("- Space/Screen tap: Jump")
+            print("- ESC: Return to menu")
+            print("\nStarting demo in 3 seconds...")
+            pygame.time.delay(3000)
+            
+        except ValueError:
+            print("Invalid input. Using default values.")
+            self.config.gravitational_force = 5
+            self.config.jump_velocity = -40
+        
+        # Reset bird position
+        self.bird.reset_position()
+        
+        # Set demo mode state
+        self.demo_mode = "bird"
+        
+        # Run the demo loop
+        running = True
+        while running:
+            # Handle events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        running = False
+                    elif event.key == pygame.K_SPACE:
+                        self.bird.jump()
+                        self.sounds['wing'].play()
+                elif event.type == pygame.FINGERDOWN:
+                    self.bird.jump()
+                    self.sounds['wing'].play()
+            
+            # Update bird
+            current_time = pygame.time.get_ticks()
+            self.bird.update_animation(current_time)
+            
+            # Custom bird update for demo (without game state)
+            prev_y = self.bird.y
+            self.bird.velocity += self.config.gravitational_force
+            self.bird.y += int(self.bird.velocity)
+            
+            # Update bird image and angle
+            if self.bird.last_action == 1:  # Just jumped
+                self.bird.current_img = self.bird.downflap_img
+                self.bird.last_action = 0
+            elif self.bird.y < prev_y:  # Moving upward
+                self.bird.current_img = self.bird.midflap_img
+            else:  # Falling
+                self.bird.current_img = self.bird.upflap_img
+                
+            if self.bird.velocity < 0:  # Moving upward
+                self.bird.angle = self.config.max_upward_angle
+            else:  # Falling
+                self.bird.angle = max(self.config.max_downward_angle, self.bird.angle - self.config.downward_rotation_speed)
+            
+            # Ceiling collision
+            if self.bird.y < 0:
+                self.bird.y = 0
+                self.bird.velocity = 0
+                
+            # Floor collision - create a virtual floor
+            floor_y = self.game_area_height - 50
+            if self.bird.y + self.bird.current_img.get_height() > floor_y:
+                self.bird.y = floor_y - self.bird.current_img.get_height()
+                self.bird.velocity = 0
+            
+            # Draw
+            self.game_surface.fill((50, 50, 50))  # Dark gray background
+            
+            # Draw floor line
+            pygame.draw.line(self.game_surface, (200, 200, 200), (0, floor_y), (self.screen_width, floor_y), 3)
+            
+            # Draw ceiling line
+            pygame.draw.line(self.game_surface, (200, 200, 200), (0, 0), (self.screen_width, 0), 3)
+            
+            # Draw the bird
+            self.bird.draw(self.game_surface)
+            
+            # Draw physics info
+            font = pygame.font.SysFont(None, 24)
+            info_text = f"Gravity: {self.config.gravitational_force}  Jump: {self.config.jump_velocity}  Velocity: {self.bird.velocity:.1f}"
+            info_surface = font.render(info_text, True, (255, 255, 255))
+            self.game_surface.blit(info_surface, (10, 10))
+            
+            # Instructions
+            instructions = "Space/tap to jump, ESC to exit"
+            instructions_surface = font.render(instructions, True, (255, 255, 255))
+            self.game_surface.blit(instructions_surface, (10, self.game_area_height - 30))
+            
+            # Update display
+            self.screen.fill((0, 0, 0))
+            self.screen.blit(self.game_surface, (0, self.game_area_y_offset))
+            pygame.display.flip()
+            
+            # Cap the frame rate
+            self.clock.tick(60)
+        
+    def run_background_demo(self):
+        """Run a demo showing background and land mechanics."""
+        print("\nBackground Manager Demo")
+        print("Demo controls:")
+        print("- Space/Screen tap: Generate new land")
+        print("- ESC: Return to menu")
+        print("\nStarting demo in 3 seconds...")
+        pygame.time.delay(3000)
+        
+        # Reset state
+        self.demo_mode = "background"
+        
+        # Run the demo loop
+        running = True
+        generate_new_land = False
+        land_sets = 2  # Start with 2 land segments
+        
+        while running:
+            # Handle events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        running = False
+                    elif event.key == pygame.K_SPACE:
+                        generate_new_land = True
+                elif event.type == pygame.FINGERDOWN:
+                    generate_new_land = True
+            
+            # Update land scrolling
+            self.background.land_scroll -= self.config.scroll_speed
+            
+            # Check if we need to reset the land scroll
+            if self.background.land_scroll <= -self.screen_width * (land_sets - 1):
+                # If user tapped, generate new land
+                if generate_new_land:
+                    generate_new_land = False
+                    land_sets += 1
+                    print(f"Generated new land segment (total: {land_sets})")
+            
+            # Draw
+            self.game_surface.fill((0, 0, 0))
+            
+            # Draw background
+            self.background.draw(self.game_surface)
+            
+            # Draw multiple land segments for demo
+            land_y = self.game_area_height - self.background.land_height
+            for i in range(land_sets):
+                self.game_surface.blit(self.background.land_img, 
+                                      (self.background.land_scroll + self.screen_width * i, land_y))
+            
+            # Draw info
+            font = pygame.font.SysFont(None, 24)
+            info_text = f"Land segments: {land_sets}  Scroll position: {self.background.land_scroll}"
+            info_surface = font.render(info_text, True, (255, 255, 255))
+            self.game_surface.blit(info_surface, (10, 10))
+            
+            # Instructions
+            instructions = "Space/tap for new land when current land ends, ESC to exit"
+            instructions_surface = font.render(instructions, True, (255, 255, 255))
+            self.game_surface.blit(instructions_surface, (10, self.game_area_height - 30))
+            
+            # Update display
+            self.screen.fill((0, 0, 0))
+            self.screen.blit(self.game_surface, (0, self.game_area_y_offset))
+            pygame.display.flip()
+            
+            # Cap the frame rate
+            self.clock.tick(60)
+    
+    def run_pipes_demo(self):
+        """Run a demo showing pipe generation and mechanics."""
+        print("\nPipes Demo")
+        try:
+            pipe_count = int(input("Enter number of fixed pipes to show (default 3): ") or "3")
+        except ValueError:
+            print("Invalid input. Using default value.")
+            pipe_count = 3
+            
+        print("Demo controls:")
+        print("- Space/Screen tap: Generate new pipe set")
+        print("- ESC: Return to menu")
+        print("\nStarting demo in 3 seconds...")
+        pygame.time.delay(3000)
+        
+        # Reset state
+        self.demo_mode = "pipes"
+        self.pipes.pipes = []
+        
+        # Generate initial pipes
+        pipe_spacing = self.screen_width / (pipe_count + 1)
+        for i in range(pipe_count):
+            # Place pipes evenly across the screen
+            pipe = self.pipes.generate_pipe()
+            pipe[0] = (i + 1) * pipe_spacing
+            self.pipes.pipes.append(pipe)
+        
+        # Run the demo loop
+        running = True
+        waiting_for_tap = False
+        
+        while running:
+            # Handle events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        running = False
+                    elif event.key == pygame.K_SPACE and waiting_for_tap:
+                        # Generate new pipe set
+                        waiting_for_tap = False
+                        self.pipes.pipes = []
+                        for i in range(pipe_count):
+                            pipe = self.pipes.generate_pipe()
+                            pipe[0] = (i + 1) * pipe_spacing
+                            self.pipes.pipes.append(pipe)
+                        print("Generated new pipe set")
+                elif event.type == pygame.FINGERDOWN and waiting_for_tap:
+                    # Generate new pipe set on tap
+                    waiting_for_tap = False
+                    self.pipes.pipes = []
+                    for i in range(pipe_count):
+                        pipe = self.pipes.generate_pipe()
+                        pipe[0] = (i + 1) * pipe_spacing
+                        self.pipes.pipes.append(pipe)
+                    print("Generated new pipe set")
+            
+            # Move pipes if not waiting for tap
+            if not waiting_for_tap:
+                # Update pipe positions
+                all_off_screen = True
+                for pipe in self.pipes.pipes:
+                    pipe[0] -= self.config.scroll_speed
+                    if pipe[0] + self.pipes.pipe_top_img.get_width() > 0:
+                        all_off_screen = False
+                
+                # Check if all pipes are off screen
+                if all_off_screen:
+                    waiting_for_tap = True
+                    print("All pipes off screen. Tap/Space to generate new pipes.")
+            
+            # Draw
+            self.game_surface.fill((0, 0, 0))
+            
+            # Draw background (just for reference)
+            self.background.draw(self.game_surface)
+            
+            # Draw pipes
+            self.pipes.draw(self.game_surface)
+            
+            # Draw land for reference
+            self.background.draw_land(self.game_surface)
+            
+            # Draw info
+            font = pygame.font.SysFont(None, 24)
+            status_text = "Waiting for tap/space to generate new pipes" if waiting_for_tap else f"Showing {pipe_count} pipes"
+            info_surface = font.render(status_text, True, (255, 255, 255))
+            self.game_surface.blit(info_surface, (10, 10))
+            
+            # Instructions
+            instructions = "Wait for pipes to exit left, then tap/space for new pipes, ESC to exit"
+            instructions_surface = font.render(instructions, True, (255, 255, 255))
+            self.game_surface.blit(instructions_surface, (10, self.game_area_height - 30))
+            
+            # Update display
+            self.screen.fill((0, 0, 0))
+            self.screen.blit(self.game_surface, (0, self.game_area_y_offset))
+            pygame.display.flip()
+            
+            # Cap the frame rate
+            self.clock.tick(60)
+    
+    def run_demo(self):
+        """Run the demo menu system."""
+        menu = MenuSystem()
+        
+        while True:
+            choice = menu.get_choice()
+            
+            if choice == 1:
+                self.run_bird_mechanics_demo()
+            elif choice == 2:
+                self.run_background_demo()
+            elif choice == 3:
+                self.run_pipes_demo()
+            elif choice == 4:
+                # Run the full game
+                self.run()
+                # After game exits, return to menu
+            elif choice == 5:
+                print("Exiting...")
+                break
+                
+        pygame.quit()
+        sys.exit()
+
+
+# Create and run the game with demo menu
 if __name__ == "__main__":
-    game = FlappyGame()
-    game.run()
+    game = FlappyGameDemo()
+    game.run_demo()
