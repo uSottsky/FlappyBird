@@ -253,17 +253,9 @@ class Bird:
         # Remember previous position to determine direction
         prev_y = self.y
         
-        # Apply gravity as a constant value, not an acceleration
-        gravity_value = self.config.gravitational_force * (1.5 if game_state == 2 else 1)
-        
-        if self.velocity < gravity_value * 2:  # Limit the fall speed
-            self.velocity += gravity_value  # Still increment but will be limited
-        
-        # Cap maximum fall speed
-        max_fall_speed = gravity_value * 2
-        if self.velocity > max_fall_speed:
-            self.velocity = max_fall_speed
-            
+        # Apply gravity with original physics
+        gravity_mult = 1.5 if game_state == 2 else 1  # Higher gravity in GAME_OVER
+        self.velocity += self.config.gravitational_force * gravity_mult
         self.y += int(self.velocity)
         
         # Update bird image based on movement
