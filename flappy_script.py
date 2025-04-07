@@ -25,7 +25,7 @@ BIRD_JUMP = -40.0
 PIPE_COUNT = 3
 PIPE_GAP_MULTIPLIER = 1.5  # Multiplier for vertical gap between pipes (higher = wider gap)
 PIPE_SPACING_MULTIPLIER = 1.8  # Multiplier for horizontal spacing between pipes (higher = more space)
-SCROLL_SPEED_MULTIPLIER = 0.3  # Multiplier for scroll speed (lower = slower)
+SCROLL_SPEED_MULTIPLIER = 1.0  # Multiplier for scroll speed (lower = slower)
 
 
 class GameAssetManager:
