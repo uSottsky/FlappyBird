@@ -662,6 +662,11 @@ class FlappyGame:
         # Clock for controlling framerate
         self.clock = pygame.time.Clock()
         
+        # To ensure consistent performance between themes, add frame timing code
+        self.frame_times = []
+        self.last_fps_update = 0
+        self.fps = 0
+        
     def load_sounds(self):
         """Load all game sounds."""
         self.sounds = {
@@ -794,6 +799,12 @@ class FlappyGame:
         # Draw flash effect
         self.flash.draw(self.game_surface)
         
+        # Debug: Uncomment to display FPS
+        # fps_text = f"FPS: {self.fps}"
+        # font = pygame.font.SysFont(None, 24)
+        # fps_surface = font.render(fps_text, True, (255, 255, 255))
+        # self.game_surface.blit(fps_surface, (10, 10))
+        
         # Fill the screen with black first
         self.screen.fill((0, 0, 0))
         
@@ -807,6 +818,9 @@ class FlappyGame:
         """Main game loop."""
         running = True
         while running:
+            # Time the frame
+            frame_start = pygame.time.get_ticks()
+            
             # Handle events
             running = self.handle_events()
             
@@ -818,6 +832,16 @@ class FlappyGame:
             
             # Cap the frame rate
             self.clock.tick(60)
+            
+            # Calculate FPS
+            frame_time = pygame.time.get_ticks() - frame_start
+            self.frame_times.append(frame_time)
+            if len(self.frame_times) > 30:
+                self.frame_times.pop(0)
+            
+            if pygame.time.get_ticks() - self.last_fps_update > 1000:
+                self.fps = int(1000 / (sum(self.frame_times) / len(self.frame_times)))
+                self.last_fps_update = pygame.time.get_ticks()
             
         # Clean up
         pygame.quit()
