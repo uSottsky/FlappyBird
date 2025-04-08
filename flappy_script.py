@@ -12,20 +12,20 @@ import random
 # 4 = Overall Game
 # 5 = Exit
 # -----------------------------------------------
-SELECTED_DEMO = 3  # Default: Full game
+SELECTED_DEMO = 4  # Default: Full game
 
 # -----------------------------------------------
 # GAME PARAMETERS - THESE AFFECT BOTH DEMOS AND FULL GAME
 # -----------------------------------------------
 # Bird Mechanics parameters
-BIRD_GRAVITY = 5.0
-BIRD_JUMP = -40.0
+BIRD_GRAVITY = 1.0
+BIRD_JUMP = -10.0
 
 # Pipes parameters
 PIPE_COUNT = 3
-PIPE_GAP_MULTIPLIER = 1.5  # Multiplier for vertical gap between pipes (higher = wider gap)
-PIPE_SPACING_MULTIPLIER = 1.8  # Multiplier for horizontal spacing between pipes (higher = more space)
-SCROLL_SPEED_MULTIPLIER = 1.0  # Multiplier for scroll speed (lower = slower)
+PIPE_GAP_MULTIPLIER = 3.0  # Multiplier for vertical gap between pipes (higher = wider gap)
+PIPE_SPACING_MULTIPLIER = 2.5  # Multiplier for horizontal spacing between pipes (higher = more space)
+SCROLL_SPEED_MULTIPLIER = .5  # Multiplier for scroll speed (lower = slower)
 
 
 class GameAssetManager:
@@ -112,7 +112,8 @@ class GameConfig:
     def toggle_theme(self):
         """Toggle between day and night themes."""
         self.is_night_theme = not self.is_night_theme
-        # No need to call update_theme_settings since physics don't change
+        # Important: Do not modify any physics parameters here to keep them universal
+        # Only visual assets should change, not game mechanics
 
 
 class BackgroundManager:
@@ -125,7 +126,7 @@ class BackgroundManager:
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.land_height = int(screen_height * 0.17)
-        
+        self.base_bird_size_percentage = 0.1  # 10% of screen width
         # Load assets
         self.load_assets()
         
@@ -135,7 +136,7 @@ class BackgroundManager:
     def load_assets(self):
         """Load background assets based on current theme."""
         # Background
-        bg_filename = 'background-night.png' if self.config.is_night_theme else 'dayBackground.png'
+        bg_filename = 'background-night.png' if self.config.is_night_theme else 'background-day.png'
         self.background_img = self.assets.load_image(bg_filename)
         self.background_img = pygame.transform.scale(self.background_img, (self.screen_width, self.screen_height))
         
