@@ -10,9 +10,10 @@ import random
 # 2 = Background Manager Demo
 # 3 = Pipes Demo
 # 4 = Overall Game
-# 5 = Exit
+# 5 = Pure Bird Response Demo
+# 6 = Exit
 # -----------------------------------------------
-SELECTED_DEMO = 4  # Default: Full game
+SELECTED_DEMO = 1  # Default: Full game
 
 # -----------------------------------------------
 # GAME PARAMETERS - THESE AFFECT BOTH DEMOS AND FULL GAME
@@ -20,6 +21,16 @@ SELECTED_DEMO = 4  # Default: Full game
 # Bird Mechanics parameters
 BIRD_GRAVITY = 1.0
 BIRD_JUMP = -10.0
+
+# Horizontal Scroll parameters
+SCROLL_BASE_SPEED = 13  # Base horizontal scroll speed in pixels per frame
+SCROLL_SPEED_MULTIPLIER = .5  # Multiplier for scroll speed (lower = slower)
+
+# Bird Rotation parameters
+BIRD_MAX_UPWARD_ANGLE = 45  # Degrees - bird nose up angle when rising
+BIRD_MAX_DOWNWARD_ANGLE = -90  # Degrees - bird nose down angle when falling
+BIRD_ROTATION_SPEED = 3  # Base rotation speed
+BIRD_DOWNWARD_ROTATION_SPEED = 10  # How fast bird rotates downward when falling
 
 # Pipes parameters
 PIPE_COUNT = 3
@@ -92,17 +103,17 @@ class GameConfig:
         # Physics constants (same for both themes)
         self.gravitational_force = BIRD_GRAVITY  # Use global parameter
         self.jump_velocity = BIRD_JUMP  # Use global parameter
-        self.original_scroll_speed = 13  # Store original speed
-        self.scroll_speed = 13 * SCROLL_SPEED_MULTIPLIER  # Apply speed multiplier
+        self.original_scroll_speed = SCROLL_BASE_SPEED  # Use global parameter
+        self.scroll_speed = SCROLL_BASE_SPEED * SCROLL_SPEED_MULTIPLIER  # Apply speed multiplier
         
         # Bird sizing
         self.base_bird_size_percentage = 0.1
         
-        # Animation settings
-        self.max_upward_angle = 45
-        self.max_downward_angle = -90
-        self.rotation_speed = 3
-        self.downward_rotation_speed = 10
+        # Animation settings - use global rotation parameters
+        self.max_upward_angle = BIRD_MAX_UPWARD_ANGLE
+        self.max_downward_angle = BIRD_MAX_DOWNWARD_ANGLE
+        self.rotation_speed = BIRD_ROTATION_SPEED
+        self.downward_rotation_speed = BIRD_DOWNWARD_ROTATION_SPEED
         
     def update_theme_settings(self):
         """Update game settings based on current theme."""
@@ -990,6 +1001,97 @@ class FlappyGameDemo(FlappyGame):
             # Cap the frame rate
             self.clock.tick(60)
     
+    def run_pure_bird_demo(self):
+        """Run a demo showing only bird response to taps without game dynamics."""
+        print("\nPure Bird Response Demo")
+        print("Controls:")
+        print("- Space/Screen tap: Make the bird jump")
+        print("- ESC: Exit")
+        pygame.time.delay(2000)
+        
+        # Reset bird position to center
+        self.bird.reset_position()
+        
+        # Run the demo loop
+        running = True
+        while running:
+            # Handle events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        running = False
+                    elif event.key == pygame.K_SPACE:
+                        # Bird jumps with standard jump velocity
+                        self.bird.jump()
+                        self.sounds['wing'].play()
+                elif event.type == pygame.FINGERDOWN:
+                    # Bird jumps on touch too
+                    self.bird.jump()
+                    self.sounds['wing'].play()
+            
+            # Update bird animation
+            current_time = pygame.time.get_ticks()
+            self.bird.update_animation(current_time)
+            
+            # Apply gravity and update bird position (now included)
+            prev_y = self.bird.y
+            self.bird.velocity += self.config.gravitational_force
+            self.bird.y += int(self.bird.velocity)
+            
+            # Update bird image and angle
+            if self.bird.last_action == 1:  # Just jumped
+                self.bird.current_img = self.bird.downflap_img
+                self.bird.last_action = 0
+            elif self.bird.y < prev_y:  # Moving upward
+                self.bird.current_img = self.bird.midflap_img
+            else:  # Falling
+                self.bird.current_img = self.bird.upflap_img
+                
+            if self.bird.velocity < 0:  # Moving upward
+                self.bird.angle = self.config.max_upward_angle
+            else:  # Falling
+                self.bird.angle = max(self.config.max_downward_angle, self.bird.angle - self.config.downward_rotation_speed)
+            
+            # Prevent bird from going above the screen
+            if self.bird.y < 0:
+                self.bird.y = 0
+                self.bird.velocity = 0
+            
+            # Floor collision - create a virtual floor (but no game over)
+            floor_y = self.game_area_height - 50
+            if self.bird.y + self.bird.current_img.get_height() > floor_y:
+                self.bird.y = floor_y - self.bird.current_img.get_height()
+                self.bird.velocity = 0
+            
+            # Draw
+            self.game_surface.fill((135, 206, 235))  # Sky blue background
+            
+            # Draw floor line
+            pygame.draw.line(self.game_surface, (200, 200, 200), (0, floor_y), (self.screen_width, floor_y), 3)
+            
+            # Draw the bird
+            self.bird.draw(self.game_surface)
+            
+            # Draw instructions
+            font = pygame.font.SysFont(None, 24)
+            info_text = f"Gravity: {self.config.gravitational_force}  Jump: {self.config.jump_velocity}  Velocity: {self.bird.velocity:.1f}"
+            info_surface = font.render(info_text, True, (255, 255, 255))
+            self.game_surface.blit(info_surface, (10, 10))
+            
+            instructions = "Space/tap to make bird jump, ESC to exit"
+            instructions_surface = font.render(instructions, True, (255, 255, 255))
+            self.game_surface.blit(instructions_surface, (10, self.game_area_height - 30))
+            
+            # Update display
+            self.screen.fill((0, 0, 0))
+            self.screen.blit(self.game_surface, (0, self.game_area_y_offset))
+            pygame.display.flip()
+            
+            # Cap the frame rate
+            self.clock.tick(60)
+    
     def run_background_demo(self):
         """Run a demo showing background and land mechanics."""
         print("\nBackground Manager Demo")
@@ -1221,12 +1323,15 @@ class FlappyGameDemo(FlappyGame):
             print("Starting Full Game...")
             self.run()
         elif SELECTED_DEMO == 5:
+            print("Starting Pure Bird Response Demo...")
+            self.run_pure_bird_demo()
+        elif SELECTED_DEMO == 6:
             print("Exiting...")
             pygame.quit()
             sys.exit()
         else:
             print(f"Invalid demo selection: {SELECTED_DEMO}")
-            print("Valid options: 1=Bird, 2=Background, 3=Pipes, 4=Full Game, 5=Exit")
+            print("Valid options: 1=Bird, 2=Background, 3=Pipes, 4=Full Game, 5=Pure Bird Response, 6=Exit")
             print("Defaulting to Full Game...")
             self.run()
 
