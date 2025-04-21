@@ -13,7 +13,7 @@ import random
 # 5 = Pure Bird Response Demo
 # 6 = Exit
 # -----------------------------------------------
-SELECTED_DEMO = 1  # Default: Full game
+SELECTED_DEMO = 5 # Default: Full game
 
 # -----------------------------------------------
 # GAME PARAMETERS - THESE AFFECT BOTH DEMOS AND FULL GAME
@@ -1003,7 +1003,7 @@ class FlappyGameDemo(FlappyGame):
     
     def run_pure_bird_demo(self):
         """Run a demo showing only bird response to taps without game dynamics."""
-        print("\nPure Bird Response Demo")
+        print("\nPure Bird Response Demo with Background")
         print("Controls:")
         print("- Space/Screen tap: Make the bird jump")
         print("- ESC: Exit")
@@ -1011,6 +1011,12 @@ class FlappyGameDemo(FlappyGame):
         
         # Reset bird position to center
         self.bird.reset_position()
+        
+        # Set up land scrolling from demo #2
+        num_land_segments = 2  # Fixed number of land segments
+        land_positions = []
+        for i in range(num_land_segments):
+            land_positions.append(i * self.screen_width)
         
         # Run the demo loop
         running = True
@@ -1060,23 +1066,42 @@ class FlappyGameDemo(FlappyGame):
                 self.bird.velocity = 0
             
             # Floor collision - create a virtual floor (but no game over)
-            floor_y = self.game_area_height - 50
+            floor_y = self.game_area_height - self.background.land_height
             if self.bird.y + self.bird.current_img.get_height() > floor_y:
                 self.bird.y = floor_y - self.bird.current_img.get_height()
                 self.bird.velocity = 0
             
-            # Draw
-            self.game_surface.fill((135, 206, 235))  # Sky blue background
+            # Scroll the land segments from demo #2
+            for i in range(len(land_positions)):
+                land_positions[i] -= self.config.scroll_speed
+                
+            # Add new land segments when needed
+            if not land_positions or max(land_positions) < self.screen_width:
+                if land_positions:
+                    land_positions.append(land_positions[-1] + self.screen_width)
+                else:
+                    # If list is empty, start from screen width
+                    land_positions.append(self.screen_width)
             
-            # Draw floor line
-            pygame.draw.line(self.game_surface, (200, 200, 200), (0, floor_y), (self.screen_width, floor_y), 3)
+            # Remove land segments that are completely off-screen
+            while land_positions and land_positions[0] < -self.screen_width:
+                land_positions.pop(0)
+            
+            # Draw
+            # Draw background first
+            self.background.draw(self.game_surface)
+            
+            # Draw each land segment at its tracked position
+            land_y = self.game_area_height - self.background.land_height
+            for pos in land_positions:
+                self.game_surface.blit(self.background.land_img, (pos, land_y))
             
             # Draw the bird
             self.bird.draw(self.game_surface)
             
             # Draw instructions
             font = pygame.font.SysFont(None, 24)
-            info_text = f"Gravity: {self.config.gravitational_force}  Jump: {self.config.jump_velocity}  Velocity: {self.bird.velocity:.1f}"
+            info_text = f"Gravity: {self.config.gravitational_force}  Jump: {self.config.jump_velocity}  Speed: {self.config.scroll_speed:.1f}"
             info_surface = font.render(info_text, True, (255, 255, 255))
             self.game_surface.blit(info_surface, (10, 10))
             
